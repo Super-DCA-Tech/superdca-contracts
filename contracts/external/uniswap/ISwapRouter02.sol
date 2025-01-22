@@ -1,42 +1,34 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity >=0.7.5 <0.9.0;
 
-import '@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol';
+interface ISwapRouter02  {
 
-interface ISwapRouter02 is ISwapRouter {
-    function exactInputSingle(
-        ISwapRouter.ExactInputSingleParams calldata params
-    ) external payable returns (uint256 amountOut);
+    struct ExactInputParams {
+        bytes path;
+        address recipient;
+        uint256 amountIn;
+        uint256 amountOutMinimum;
+    }
 
-    function exactInput(
-        ISwapRouter.ExactInputParams calldata params
-    ) external payable returns (uint256 amountOut);
+    /// @notice Swaps `amountIn` of one token for as much as possible of another along the specified path
+    /// @dev Setting `amountIn` to 0 will cause the contract to look up its own balance,
+    /// and swap the entire amount, enabling contracts to send tokens before calling this function.
+    /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactInputParams` in calldata
+    /// @return amountOut The amount of the received token
+    function exactInput(ExactInputParams calldata params) external payable returns (uint256 amountOut);
 
-    function exactOutputSingle(
-        ISwapRouter.ExactOutputSingleParams calldata params
-    ) external payable returns (uint256 amountIn);
 
-    function exactOutput(
-        ISwapRouter.ExactOutputParams calldata params
-    ) external payable returns (uint256 amountIn);
+    struct ExactOutputParams {
+        bytes path;
+        address recipient;
+        uint256 amountOut;
+        uint256 amountInMaximum;
+    }
 
-    function multicall(bytes[] calldata data) external payable returns (bytes[] memory results);
+    /// @notice Swaps as little as possible of one token for `amountOut` of another along the specified path (reversed)
+    /// that may remain in the router after the swap.
+    /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactOutputParams` in calldata
+    /// @return amountIn The amount of the input token
+    function exactOutput(ExactOutputParams calldata params) external payable returns (uint256 amountIn);
 
-    function unwrapWETH9(uint256 amountMinimum, address recipient) external payable;
-
-    function refundETH() external payable;
-
-    function sweepToken(
-        address token,
-        uint256 amountMinimum,
-        address recipient
-    ) external payable;
-
-    function sweepTokenWithFee(
-        address token,
-        uint256 amountMinimum,
-        address recipient,
-        uint256 feeBips,
-        address feeRecipient
-    ) external payable;
 }

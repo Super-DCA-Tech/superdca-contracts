@@ -9,9 +9,9 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {IUniswapV3Factory} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
-import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
+import "./external/uniswap/ISwapRouter02.sol";
 import "./external/gelato/AutomateTaskCreator.sol";
 import "./external/superfluid/ISETHCustom.sol";
 import "./external/weth/IWETH.sol";
@@ -40,7 +40,7 @@ contract SuperDCAPoolV1 is
         ISuperToken wethx;
         ISuperToken inputToken;
         ISuperToken outputToken;
-        ISwapRouter router;
+        ISwapRouter02 router;
         IUniswapV3Factory uniswapFactory;
         address[] uniswapPath;
         uint24[] poolFees;
@@ -73,13 +73,13 @@ contract SuperDCAPoolV1 is
     ISuperToken public wethx;
     uint32 public constant OUTPUT_INDEX = 0; // Superfluid IDA Index for outputToken's output pool
     uint256 public constant INTERVAL = 60; // The interval for gelato to check for execution
-    uint128 public constant BASIS_POINT_SCALER = 1e4; // The scaler for basis points
+    uint256 public constant EXEC_FEE_SCALER = 1e18; // The scaler for the execution fee (1e18 = 100%)
     // TODO: make's minoutput 0 for simulation
     uint public constant RATE_TOLERANCE = 1e4; // The percentage to deviate from the oracle (basis points)
     uint128 public constant SHARE_SCALER = 100000; // The scaler to apply to the share of the outputToken pool
 
     // Uniswap Variables
-    ISwapRouter public router; // UniswapV3 Router
+    ISwapRouter02 public router; // UniswapV3 Router
     address[] public uniswapPath; // The path between inputToken and outputToken
     uint24[] public poolFees; // The pool fee to use in the path between inputToken and outputToken
     uint24 public constant GELATO_GAS_POOL_FEE = 500; // The pool fee to use for gas reimbursements to Gelato
@@ -90,8 +90,15 @@ contract SuperDCAPoolV1 is
 
     // Gelato task variables
     bytes32 public taskId;
-    uint256 public gelatoFeeShare = 100; // number of basis points gelato takes for executing the task
-    uint256 public distributionInterval = 4 hours; // the interval between distributions
+    uint256 public gelatoFeeShare = 1e16; // number of basis points gelato takes for executing the task
+    uint256 public distributionInterval = 4 hours; // the interval to retarget to by adjusting fee share
+
+    // Constants for fee retargeting calculations
+    uint256 public constant DECIMALS = 18;
+    uint256 public constant MIN_FEE_SHARE = 1; // 1 wei lower bound
+    uint256 public constant MAX_FEE_SHARE = 1e16; // 1% = 0.01 = 1e16 (with 18 decimals)
+    uint256 public constant GROWTH_FACTOR = 2; // Simple multiplier of 2
+    uint256 public constant MAX_HOURS_PAST_INTERVAL = 10; // Maximum hours past the interval to consider
 
     /// @dev Swap data for performance tracking overtime
     /// @param inputAmount The amount of inputToken swapped
@@ -196,7 +203,7 @@ contract SuperDCAPoolV1 is
     /// @param _uniswapPath is the Uniswap V3 path
     /// @param _poolFees is the Uniswap V3 pool fees
     function _initializeUniswap(
-        ISwapRouter _uniswapRouter,
+        ISwapRouter02 _uniswapRouter,
         IUniswapV3Factory _uniswapFactory,
         address[] memory _uniswapPath,
         uint24[] memory _poolFees
@@ -311,17 +318,8 @@ contract SuperDCAPoolV1 is
             newCtx
         );
 
-        // If the last distribution is less than the desired interval
-        if (
-            block.timestamp - lastDistributedAt <= distributionInterval &&
-            gelatoFeeShare > 1
-        ) {
-            // Reduce the gelatoFeeShare by 1-basis point
-            gelatoFeeShare = gelatoFeeShare - 1;
-        } else if (gelatoFeeShare < 100) {
-            // Otherwise raise the gelatoFeeShare by 1-basis point
-            gelatoFeeShare = gelatoFeeShare + 1;
-        }
+        // Replace the existing fee share update logic with:
+        gelatoFeeShare = getExecutionFeeShare(gelatoFeeShare);
         emit UpdateGelatoFeeShare(gelatoFeeShare);
 
         // Record when the last distribution happened for other calculations
@@ -362,7 +360,7 @@ contract SuperDCAPoolV1 is
 
         // gelatoFeeShare reserves some underlyingInputToken for gas reimbursement
         // Use this amount to swap for enough WETH to cover the gas fee
-        ISwapRouter.ExactOutputParams memory params = ISwapRouter
+        ISwapRouter02.ExactOutputParams memory params = ISwapRouter02
             .ExactOutputParams({
                 path: abi.encodePacked(
                     address(weth),
@@ -371,9 +369,7 @@ contract SuperDCAPoolV1 is
                 ),
                 recipient: address(this),
                 amountOut: amountOut,
-                // This is a swap for the gas fee reimbursement and will not be frontrun
-                amountInMaximum: type(uint256).max,
-                deadline: block.timestamp
+                amountInMaximum: type(uint256).max
             });
 
         return router.exactOutput(params);
@@ -386,41 +382,19 @@ contract SuperDCAPoolV1 is
     function _swap(
         uint256 amount
     ) internal returns (uint256 outAmount, uint256 latestPrice) {
-        uint256 minOutput; // The minimum amount of output tokens based on oracle
-
         // Downgrade if this is not a supertoken
         if (underlyingInputToken != address(inputToken)) {
             inputToken.downgrade(inputToken.balanceOf(address(this)));
         }
 
-        // Calculate the amount of tokens
+        // Calculate the amount of tokens, equal to the balance minus the execution fee
         amount = ERC20(underlyingInputToken).balanceOf(address(this));
         amount =
-            (amount * (BASIS_POINT_SCALER - gelatoFeeShare)) /
-            BASIS_POINT_SCALER;
+            (amount * (EXEC_FEE_SCALER - gelatoFeeShare)) /
+            EXEC_FEE_SCALER;
 
-        // Calculate minOutput based on oracle
+        // Record the latest price from the oracle for easy performance tracking
         latestPrice = uint(int(getLatestPrice()));
-        // If there's no oracle address setup, don't protect against slippage
-        // if (latestPrice == 0) {
-        //     minOutput = 0;
-        // } else if (!invertPrice) {
-        //     minOutput = (amount * 1e8) / latestPrice;
-        //     // Scale the minOutput to the right percision
-        //     minOutput *= 10 ** (18 - ERC20(underlyingInputToken).decimals());
-        // } else {
-        //     // Invert the rate provided by the oracle, e.g. ETH >> USDC
-        //     minOutput = (amount * latestPrice) / 1e8;
-        //     // Scale the minOutput to the right percision
-        //     minOutput /=
-        //         10 ** (18 - ERC20(underlyingOutputToken).decimals()) *
-        //         1e8;
-        // }
-
-        // Apply the rate tolerance to allow for some slippage
-        // minOutput =
-        //     (minOutput * (BASIS_POINT_SCALER - RATE_TOLERANCE)) /
-        //     BASIS_POINT_SCALER;
 
         // Encode the path for swap
         bytes memory encodedPath;
@@ -437,15 +411,14 @@ contract SuperDCAPoolV1 is
         }
 
         // This is the code for the uniswap
-        ISwapRouter.ExactInputParams memory params = ISwapRouter
+        ISwapRouter02.ExactInputParams memory params = ISwapRouter02
             .ExactInputParams({
                 path: encodedPath,
                 recipient: address(this),
                 amountIn: amount,
                 // Disabled on this version since initial liquidity for SuperDCA liquidity Network is low
                 // SuperDCA Swaps are very small by design, its unlikely frontrunning these swaps will be worth it
-                amountOutMinimum: 0,
-                deadline: block.timestamp
+                amountOutMinimum: 0
             });
         outAmount = router.exactInput(params);
 
@@ -1055,4 +1028,36 @@ contract SuperDCAPoolV1 is
     }
 
     receive() external payable {}
+
+    /// @notice Get the execution fee share based on the current fee share and the time since last distribution
+    /// @dev Retargeting higher uses exponential binary backoff, retargeting lower uses simple division
+    /// @param _currentFeeShare The current fee share
+    /// @return _adjustedFeeShare The adjusted fee share
+    function getExecutionFeeShare(uint256 _currentFeeShare) public view returns (uint256 _adjustedFeeShare) {
+        uint256 _timeSinceLastDistribution = block.timestamp - lastDistributedAt;
+
+        if (_timeSinceLastDistribution > distributionInterval) {
+            uint256 _hoursPastInterval = (_timeSinceLastDistribution - distributionInterval) / 1 hours;
+            _hoursPastInterval = _hoursPastInterval > MAX_HOURS_PAST_INTERVAL ? MAX_HOURS_PAST_INTERVAL : _hoursPastInterval;
+
+            if (_hoursPastInterval == 0) {
+                return _currentFeeShare;
+            }
+
+            _adjustedFeeShare = _currentFeeShare * (GROWTH_FACTOR ** _hoursPastInterval);
+
+            if (_adjustedFeeShare > MAX_FEE_SHARE) {
+                return MAX_FEE_SHARE;
+            }
+
+            return _adjustedFeeShare;
+        } else {
+            _adjustedFeeShare = _currentFeeShare / GROWTH_FACTOR;
+            
+            if (_adjustedFeeShare < MIN_FEE_SHARE) {
+                return MIN_FEE_SHARE;
+            }
+            return _adjustedFeeShare;
+        }
+    }
 }
