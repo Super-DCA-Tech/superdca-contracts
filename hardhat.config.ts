@@ -67,7 +67,7 @@ const config: HardhatUserConfig = {
     },
     sepolia: {
       chainId: 11155111,
-      url: process.env.SEPOLIA_NODE_URL || "https://rpc.sepolia.io",
+      url: process.env.SEPOLIA_NODE_URL || "https://sepolia.gateway.tenderly.co",
       accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
     },
     base_sepolia: {

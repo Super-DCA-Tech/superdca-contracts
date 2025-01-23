@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 
-const POOL_ADDRESS = "0x981Ac6F25F28dCB47DB1708A60881C76fe64D84E";
+const POOL_ADDRESS = "0x2Ba35B26b67889144F02D0bC3Ab26f7E12c39123";
 
 async function main() {
 

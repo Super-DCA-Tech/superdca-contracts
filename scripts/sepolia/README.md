@@ -21,7 +21,7 @@ OUTPUT_TOKEN=0x9ce2062b085a2268e8d769ffc040f6692315fd2c \
 OUTPUT_TOKEN_UNDERLYING=0x4E89088Cd14064f38E5B2F309cFaB9C864F9a8e6 \
 PRICE_FEED=0xA2F78ab2355fe2f984D808B5CeE7FD0A93D5270E \
 UNISWAP_POOL_FEE=500 \
-npx hardhat run scripts/sepolia/deploy_dca_pool.ts --network tenderly
+npx hardhat run scripts/sepolia/deploy_dca_pool.ts --network sepolia
 ```
 
 ### fDAI>>fUSDC
