@@ -14,8 +14,7 @@ import {IInstantDistributionAgreementV1} from
 import {IWETH} from "../contracts/external/weth/IWETH.sol";
 import {ISwapRouter02} from "../contracts/external/uniswap/ISwapRouter02.sol";
 import {IUniswapV3Factory} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
-import {AggregatorV3Interface} from
-  "@chainlink/contracts/interfaces/AggregatorV3Interface.sol";
+import {AggregatorV3Interface} from "@chainlink/contracts/interfaces/AggregatorV3Interface.sol";
 
 contract DeploySuperDCAPoolV1 is Script {
   // Constants from optimism network

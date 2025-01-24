@@ -17,8 +17,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {IUniswapV3Factory} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
-import {AggregatorV3Interface} from
-  "@chainlink/contracts/interfaces/AggregatorV3Interface.sol";
+import {AggregatorV3Interface} from "@chainlink/contracts/interfaces/AggregatorV3Interface.sol";
 
 import "./external/uniswap/ISwapRouter02.sol";
 import "./external/gelato/AutomateTaskCreator.sol";
@@ -26,6 +25,7 @@ import "./external/superfluid/ISETHCustom.sol";
 import "./external/weth/IWETH.sol";
 import "./SuperDCATrade.sol";
 
+import "forge-std/console.sol";
 
 contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
   using SafeERC20 for ERC20;
@@ -119,6 +119,8 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
 
   event UpdateGelatoFeeShare(uint256 newGelatoFee);
 
+  event RefundedUninvestedAmount(address shareholder, uint256 uninvestAmount);
+
   event ErrorRefundingUninvestedAmount(address shareholder, uint256 uninvestAmount);
 
   constructor(address payable _ops) AutomateTaskCreator(_ops) {
@@ -151,9 +153,6 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
 
   /// @dev Creates the distribute task on Gelato Network
   function _createTask() internal {
-    // Check the task wasn't already created
-    require(taskId == bytes32(""), "Already started task");
-
     // Create a timed interval task with Gelato Network
     bytes memory execData = abi.encodeCall(this.distribute, ("", false));
     ModuleData memory moduleData = ModuleData({modules: new Module[](2), args: new bytes[](2)});
@@ -168,7 +167,6 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
   /// @param _weth is the WETH token
   /// @param _wethx is the WETHx token
   function _initializeWETH(IWETH _weth, ISuperToken _wethx) internal {
-    require(address(weth) == address(0), "A");
     weth = _weth;
     wethx = _wethx;
   }
@@ -177,7 +175,6 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
   /// @param _inputToken is the input supertoken for the market
   /// @param _outputToken is the output supertoken for the market
   function _initializePool(ISuperToken _inputToken, ISuperToken _outputToken) internal {
-    require(address(inputToken) == address(0), "IU"); // Blocks if already initialized
     inputToken = _inputToken;
     outputToken = _outputToken;
     lastDistributedAt = block.timestamp;
@@ -205,8 +202,6 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
     address[] memory _uniswapPath,
     uint24[] memory _poolFees
   ) internal {
-    require(address(router) == address(0), "IU"); // Blocks if already initialized
-
     // Set contract variables
     router = _uniswapRouter;
     poolFees = _poolFees;
@@ -240,7 +235,6 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
   /// @dev Initialize the Chainlink Aggregator
   /// @param _priceFeed is the Chainlink Aggregator
   function _initializePriceFeed(AggregatorV3Interface _priceFeed, bool _invertPrice) internal {
-    require(address(priceFeed) == address(0), "A"); // Blocks if already initialized
     priceFeed = _priceFeed;
     invertPrice = _invertPrice;
   }
@@ -263,7 +257,6 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
     payable
     returns (bytes memory newCtx)
   {
-    uint256 gasUsed = gasleft(); // Track gas used in this function
     newCtx = ctx;
     uint256 inputTokenAmount = inputToken.balanceOf(address(this));
 
@@ -308,12 +301,6 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
       // Log the balances of the tokens
       weth.withdraw(weth.balanceOf(address(this)));
       _transfer(fee, feeToken);
-    } else {
-      // Otherwise, reimburse the gas to the msg.sender
-      gasUsed = gasUsed - gasleft();
-      fee = gasUsed * tx.gasprice; // TODO: add a threshold?
-      _swapForGas(fee);
-      ERC20(address(weth)).safeTransfer(msg.sender, fee);
     }
   }
 
@@ -342,8 +329,13 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
   // @dev This function has grown to do far more than just swap, this needs to be refactored
   function _swap(uint256 amount) internal returns (uint256 outAmount, uint256 latestPrice) {
     // Downgrade if this is not a supertoken
-    if (underlyingInputToken != address(inputToken)) {
+    console.log("underlyingInputToken", underlyingInputToken);
+    console.log("inputToken", address(inputToken));
+    if (underlyingInputToken != address(inputToken) && underlyingInputToken != address(weth)) {
       inputToken.downgrade(inputToken.balanceOf(address(this)));
+    } else if (underlyingInputToken == address(weth)) {
+      ISETHCustom(address(inputToken)).downgradeToETH(inputToken.balanceOf(address(this)));
+      weth.deposit{value: address(this).balance}();
     }
 
     // Calculate the amount of tokens, equal to the balance minus the execution fee
@@ -614,6 +606,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
     // Methods in the terminate callback can not revert, hence the try-catch
     try _superToken.transferFrom(address(this), _shareholder, _uninvestAmount) {
       // solhint-disable-next-line no-empty-blocks
+      emit RefundedUninvestedAmount(_shareholder, _uninvestAmount);
     } catch {
       // In case of any problems here, log the error for record keeping and continue
       emit ErrorRefundingUninvestedAmount(_shareholder, _uninvestAmount);
@@ -783,9 +776,10 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
     view
     returns (uint256)
   {
-    uint256 inflowRate = uint256(int256(cfa.getNetFlow(inputToken, address(this)))) / (10 ** 9); // Safe
-      // conversion - Netflow rate will always we positive or zero
-
+    int96 netFlow = cfa.getNetFlow(inputToken, address(this));
+    if (netFlow == 0) return type(uint256).max;
+    
+    uint256 inflowRate = uint256(int256(netFlow)) / (10 ** 9);
     uint256 tokenAmount = gasPrice * gasLimit * tokenToWethRate;
     uint256 timeToDistribute = (tokenAmount / inflowRate) / (10 ** 9);
     return lastDistributedAt + timeToDistribute;
