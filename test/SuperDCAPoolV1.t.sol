@@ -1026,4 +1026,100 @@ contract SuperDCAPoolV1Test is Test {
     // Close the stream which should trigger the refund
     _deleteFlow(alice);
   }
+
+  function testFork_BasicStaking() public {
+    // Setup test values
+    uint256 stakeAmount = 1000e18;
+
+    // Deal stake tokens to alice
+    deal(pool.STAKING_TOKEN_ADDRESS(), alice, stakeAmount);
+
+    // Approve and stake
+    vm.startPrank(alice);
+    IERC20(pool.STAKING_TOKEN_ADDRESS()).approve(address(pool), stakeAmount);
+    pool.stake(stakeAmount);
+    vm.stopPrank();
+
+    // Verify stake was successful
+    assertEq(pool.currentExecutor(), alice);
+    assertEq(pool.currentStake(), stakeAmount);
+  }
+
+  function testFork_TakeOverStake() public {
+    // Setup initial stake with alice
+    uint256 aliceStake = 1000e18;
+    deal(pool.STAKING_TOKEN_ADDRESS(), alice, aliceStake);
+    vm.startPrank(alice);
+    IERC20(pool.STAKING_TOKEN_ADDRESS()).approve(address(pool), aliceStake);
+    pool.stake(aliceStake);
+    vm.stopPrank();
+
+    // Bob attempts to take over with a lower stake (should fail)
+    uint256 bobLowerStake = 900e18;
+    deal(pool.STAKING_TOKEN_ADDRESS(), bob, bobLowerStake);
+    vm.startPrank(bob);
+    IERC20(pool.STAKING_TOKEN_ADDRESS()).approve(address(pool), bobLowerStake);
+    vm.expectRevert();
+    pool.stake(bobLowerStake);
+    vm.stopPrank();
+
+    // Bob takes over with a higher stake
+    uint256 bobHigherStake = 1500e18;
+    deal(pool.STAKING_TOKEN_ADDRESS(), bob, bobHigherStake);
+    vm.startPrank(bob);
+    IERC20(pool.STAKING_TOKEN_ADDRESS()).approve(address(pool), bobHigherStake);
+    pool.stake(bobHigherStake);
+    vm.stopPrank();
+
+    // Verify bob is now the executor
+    assertEq(pool.currentExecutor(), bob);
+    assertEq(pool.currentStake(), bobHigherStake);
+  }
+
+  function testFork_ExecutorEarnsFees() public {
+    // Setup initial stake with alice as executor
+    uint256 stakeAmount = 1000e18;
+    deal(pool.STAKING_TOKEN_ADDRESS(), alice, stakeAmount);
+    vm.startPrank(alice);
+    IERC20(pool.STAKING_TOKEN_ADDRESS()).approve(address(pool), stakeAmount);
+    pool.stake(stakeAmount);
+    vm.stopPrank();
+
+    // Bob creates a flow to generate fees
+    _createFlow(bob, USDCX, address(pool), uint96(INFLOW_RATE_USDC * 10));
+
+    // Record alice's initial balance
+    uint256 aliceInitialBalance = IERC20(USDC).balanceOf(alice);
+
+    // Skip time and distribute
+    skip(1 days);
+    pool.distribute(new bytes(0), true);
+
+    // Verify alice (executor) received fees
+    uint256 aliceFinalBalance = IERC20(USDC).balanceOf(alice);
+    assertGt(aliceFinalBalance, aliceInitialBalance, "Executor should receive fees");
+  }
+
+  function testFork_UnstakeRestrictions() public {
+    // Setup initial stake with alice
+    uint256 stakeAmount = 1000e18;
+    deal(pool.STAKING_TOKEN_ADDRESS(), alice, stakeAmount);
+    vm.startPrank(alice);
+    IERC20(pool.STAKING_TOKEN_ADDRESS()).approve(address(pool), stakeAmount);
+    pool.stake(stakeAmount);
+    vm.stopPrank();
+
+    // Bob shouldn't be able to unstake (wasn't previous executor)
+    vm.startPrank(bob);
+    vm.expectRevert();
+    pool.unstake();
+    vm.stopPrank();
+
+    // Alice is able to unstake and the executor is updated
+    vm.prank(alice);
+    pool.unstake();
+    assertEq(pool.currentExecutor(), address(0));
+    assertEq(pool.currentStake(), 0);
+    vm.stopPrank();
+  }
 }

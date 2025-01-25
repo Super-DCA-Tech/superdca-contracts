@@ -109,6 +109,11 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
   uint256 public constant MAX_HOURS_PAST_INTERVAL = 10; // Maximum hours past the interval to
     // consider
 
+  // Staking Variables
+  address public constant STAKING_TOKEN_ADDRESS = 0xb1599CDE32181f48f89683d3C5Db5C5D2C7C93cc;
+  address public currentExecutor;
+  uint256 public currentStake;
+
   bytes internal encodedSwapPath;
   bytes internal encodedGasPath;
 
@@ -123,6 +128,12 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
   event RefundedUninvestedAmount(address shareholder, uint256 uninvestAmount);
 
   event ErrorRefundingUninvestedAmount(address shareholder, uint256 uninvestAmount);
+
+  event NewExecutor(
+    address indexed previousExecutor, address indexed newExecutor, uint256 newStake
+  );
+
+  event StakeReturned(address indexed executor, uint256 amount);
 
   constructor(address payable _ops) AutomateTaskCreator(_ops) {
     // Deploy Trade for trade tracking
@@ -275,7 +286,39 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
     // If there is no inputToken to distribute, then return immediately
     if (inputTokenAmount == 0) return newCtx;
 
-    // Swap inputToken for outputToken, capture the latest price and output amount
+    // Downgrade tokens and get underlying balance
+    uint256 underlyingBalance = _downgradeInputTokens(inputTokenAmount);
+
+    // Update the fee share for the this distribution
+    gelatoFeeShare = getExecutionFeeShare(gelatoFeeShare);
+    emit UpdateGelatoFeeShare(gelatoFeeShare);
+
+    // Record when the last distribution happened for other calculations
+    lastDistributedAt = block.timestamp;
+
+    // Compute the maximum inputToken amount that can be used for the fee
+    uint256 amountInMaximum =
+      (underlyingBalance * (EXEC_FEE_SCALER - gelatoFeeShare)) / EXEC_FEE_SCALER;
+
+    // Support skipping this step in case it ever blocks the distribution
+    if (!ignoreGasReimbursement) {
+      // Get the fee details from Gelato Ops
+      (uint256 fee, address feeToken) = _getFeeDetails();
+
+      // If the fee is greater than 0, reimburse the fee to the Gelato Ops
+      if (fee > 0) {
+        // Reverts if the amountInMaximum is less than what's needed to cover the fee
+        _swapForGas(fee, amountInMaximum);
+        weth.withdraw(weth.balanceOf(address(this)));
+        _transfer(fee, feeToken);
+      }
+    } else if (currentExecutor != address(0)) {
+      // Send whatever fee share of inputTokens have accumulated to the staked executor
+      IERC20(underlyingInputToken).transfer(currentExecutor, amountInMaximum);
+    }
+
+    // The input token balance of this contract goes down by the amount sent to the executor
+    inputTokenAmount = inputToken.balanceOf(address(this));
     (uint256 outputTokenAmount, uint256 latestPrice) = _swap(inputTokenAmount);
 
     // Emit swap event for performance tracking purposes
@@ -293,43 +336,34 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
 
     newCtx = _idaDistribute(OUTPUT_INDEX, uint128(outputTokenAmount), outputToken, newCtx);
 
-    // Replace the existing fee share update logic with:
-    gelatoFeeShare = getExecutionFeeShare(gelatoFeeShare);
-    emit UpdateGelatoFeeShare(gelatoFeeShare);
+    return newCtx;
+  }
 
-    // Record when the last distribution happened for other calculations
-    lastDistributedAt = block.timestamp;
-
-    // Check if we should override the gas reimbursement feature
-    // i.e. this is a distribution for a stream update
-    if (ignoreGasReimbursement) return newCtx;
-    // Otherwise, calculate the gas reimbursement for Gelato or for the msg.sender
-    // Get the fee details from Gelato Ops
-    (uint256 fee, address feeToken) = _getFeeDetails();
-
-    // If the fee is greater than 0, reimburse the fee to the Gelato Ops
-    if (fee > 0) {
-      _swapForGas(fee);
-      // Log the balances of the tokens
-      weth.withdraw(weth.balanceOf(address(this)));
-      _transfer(fee, feeToken);
+  /// @dev Downgrades input tokens to their underlying tokens
+  /// @param amount Amount of input tokens to downgrade
+  /// @return The balance of underlying tokens after downgrade
+  function _downgradeInputTokens(uint256 amount) internal returns (uint256) {
+    if (underlyingInputToken != address(inputToken) && underlyingInputToken != address(weth)) {
+      inputToken.downgrade(amount);
+    } else if (underlyingInputToken == address(weth)) {
+      ISETHCustom(address(inputToken)).downgradeToETH(amount);
+      weth.deposit{value: address(this).balance}();
     }
+    return ERC20(underlyingInputToken).balanceOf(address(this));
   }
 
   // Uniswap V3 Swap Methods
 
   /// @dev Swap input token for WETH
-  function _swapForGas(uint256 amountOut) internal returns (uint256) {
-    // If the underlyingInputToken is WETH, then just return the amountOut
+  function _swapForGas(uint256 amountOut, uint256 amountInMaximum) internal returns (uint256) {
+    // We already have WETH for gas
     if (underlyingInputToken == address(weth)) return amountOut;
 
-    // gelatoFeeShare reserves some underlyingInputToken for gas reimbursement
-    // Use this amount to swap for enough WETH to cover the gas fee
     ISwapRouter02.ExactOutputParams memory params = ISwapRouter02.ExactOutputParams({
       path: encodedGasPath,
       recipient: address(this),
       amountOut: amountOut,
-      amountInMaximum: type(uint256).max
+      amountInMaximum: amountInMaximum
     });
 
     return router.exactOutput(params);
@@ -340,14 +374,6 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
   // @return outAmount Amount of outputToken received
   // @dev This function has grown to do far more than just swap, this needs to be refactored
   function _swap(uint256 amount) internal returns (uint256 outAmount, uint256 latestPrice) {
-    // Downgrade if this is not a supertoken
-    if (underlyingInputToken != address(inputToken) && underlyingInputToken != address(weth)) {
-      inputToken.downgrade(inputToken.balanceOf(address(this)));
-    } else if (underlyingInputToken == address(weth)) {
-      ISETHCustom(address(inputToken)).downgradeToETH(inputToken.balanceOf(address(this)));
-      weth.deposit{value: address(this).balance}();
-    }
-
     // Calculate the amount of tokens, equal to the balance minus the execution fee
     amount = ERC20(underlyingInputToken).balanceOf(address(this));
     amount = (amount * (EXEC_FEE_SCALER - gelatoFeeShare)) / EXEC_FEE_SCALER;
@@ -894,5 +920,42 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
       if (_adjustedFeeShare < MIN_FEE_SHARE) return MIN_FEE_SHARE;
       return _adjustedFeeShare;
     }
+  }
+
+  /// @notice Stake tokens to become the executor
+  /// @dev Must stake more than current stake to become executor
+  /// @param amount Amount of tokens to stake
+  function stake(uint256 amount) external {
+    require(amount > currentStake, "STL");
+
+    // Transfer new stake from caller
+    ERC20(STAKING_TOKEN_ADDRESS).transferFrom(msg.sender, address(this), amount);
+
+    // Return previous stake if there was one
+    if (currentExecutor != address(0)) {
+      ERC20(STAKING_TOKEN_ADDRESS).transfer(currentExecutor, currentStake);
+      emit StakeReturned(currentExecutor, currentStake);
+    }
+
+    // Update executor state
+    address previousExecutor = currentExecutor;
+    currentExecutor = msg.sender;
+    currentStake = amount;
+
+    emit NewExecutor(previousExecutor, currentExecutor, amount);
+  }
+
+  /// @notice Withdraw stake if no longer executor
+  /// @dev Only callable by previous executor if outbid
+  function unstake() external {
+    require(msg.sender == currentExecutor, "NCE");
+
+    uint256 stakeAmount = currentStake;
+    currentStake = 0;
+    currentExecutor = address(0);
+    emit NewExecutor(currentExecutor, address(0), 0);
+
+    ERC20(STAKING_TOKEN_ADDRESS).transfer(msg.sender, stakeAmount);
+    emit StakeReturned(msg.sender, stakeAmount);
   }
 }
