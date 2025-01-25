@@ -56,11 +56,7 @@ contract SuperDCAPoolV1Test is Test {
   address public bob;
   uint256 public gelatoBlockTimestamp;
 
-  function _approveSubscription(
-    address subscriber,
-    address token,
-    address poolAddress
-  ) internal {
+  function _approveSubscription(address subscriber, address token, address poolAddress) internal {
     // Get the IDA interface
     IInstantDistributionAgreementV1 ida = IInstantDistributionAgreementV1(IDA_SUPERFLUID);
 
@@ -153,19 +149,12 @@ contract SuperDCAPoolV1Test is Test {
     ICFAForwarder(CFA_FORWARDER).deleteFlow(ISuperToken(USDCX), sender, address(pool), new bytes(0));
   }
 
-  function _createFlow(
-    address sender,
-    address token,
-    address pool,
-    uint96 flowRate
-  ) internal {
+  function _createFlow(address sender, address token, address poolAddress, uint96 flowRate)
+    internal
+  {
     vm.startPrank(sender);
     ICFAForwarder(CFA_FORWARDER).createFlow(
-      ISuperToken(token),
-      sender,
-      pool,
-      int96(flowRate),
-      new bytes(0)
+      ISuperToken(token), sender, poolAddress, int96(flowRate), new bytes(0)
     );
     vm.stopPrank();
   }
@@ -745,25 +734,25 @@ contract SuperDCAPoolV1Test is Test {
   function testFork_GetTradeInfo() public {
     // Create a flow for alice
     _createFlow(alice, USDCX, address(pool), uint96(INFLOW_RATE_USDC));
-    
+
     skip(1 days);
-    
+
     // End the trade
     _deleteFlow(alice);
-    
+
     // Get trade info for the first (and only) trade
     SuperDCATrade.Trade memory trade = pool.getTradeInfo(alice, 0);
-    
+
     // Verify trade details
     assertEq(uint256(int256(trade.flowRate)), uint256(INFLOW_RATE_USDC));
     assertEq(trade.startTime, uint256(block.timestamp - 1 days));
     assertEq(trade.endTime, uint256(block.timestamp));
   }
 
-  function testFork_GetLatestTradeForNewUser() public {
+  function testFork_GetLatestTradeForNewUser() public view {
     // Get latest trade for user with no trades
     SuperDCATrade.Trade memory trade = pool.getLatestTrade(alice);
-    
+
     // Should return empty trade struct
     assertEq(uint256(int256(trade.flowRate)), 0);
     assertEq(trade.startTime, 0);
@@ -773,17 +762,17 @@ contract SuperDCAPoolV1Test is Test {
   function testFork_GetLatestTradeForActiveUser() public {
     // Create a flow for alice
     _createFlow(alice, USDCX, address(pool), uint96(INFLOW_RATE_USDC));
-    
+
     // Get latest trade
     SuperDCATrade.Trade memory trade = pool.getLatestTrade(alice);
-    
+
     // Verify trade details
     assertEq(uint256(int256(trade.flowRate)), uint256(INFLOW_RATE_USDC));
     assertEq(trade.startTime, uint256(block.timestamp));
     assertEq(trade.endTime, 0); // Should be 0 for active trade
   }
 
-  function testFork_GetTradeCountForNewUser() public {
+  function testFork_GetTradeCountForNewUser() public view {
     // Get trade count for new user
     uint256 count = pool.getTradeCount(alice);
     assertEq(count, 0);
@@ -792,21 +781,21 @@ contract SuperDCAPoolV1Test is Test {
   function testFork_GetTradeCountForActiveUser() public {
     // Create a flow for alice
     _createFlow(alice, USDCX, address(pool), uint96(INFLOW_RATE_USDC));
-    
+
     // Get trade count
     uint256 count = pool.getTradeCount(alice);
     assertEq(count, 1);
-    
+
     // Close and reopen flow to create second trade
     _deleteFlow(alice);
     _createFlow(alice, USDCX, address(pool), uint96(INFLOW_RATE_USDC));
-    
+
     // Verify count increased
     count = pool.getTradeCount(alice);
     assertEq(count, 2);
   }
 
-  function testFork_GetNextDistributionTimeWithZeroFlow() public {
+  function testFork_GetNextDistributionTimeWithZeroFlow() public view {
     // With zero inflow rate, should return lastDistributedAt
     uint256 nextDistTime = pool.getNextDistributionTime(1e9, 1e6, 1e18);
     assertEq(nextDistTime, type(uint256).max);
@@ -815,17 +804,17 @@ contract SuperDCAPoolV1Test is Test {
   function testFork_GetNextDistributionTimeWithActiveFlow() public {
     // Create a flow
     _createFlow(alice, USDCX, address(pool), uint96(INFLOW_RATE_USDC));
-    
+
     uint256 gasPrice = 1e9; // 1 Gwei
     uint256 gasLimit = 1e6; // 1M gas
     uint256 tokenToWethRate = 1e18; // 1:1 for simplicity
-    
+
     uint256 nextDistTime = pool.getNextDistributionTime(gasPrice, gasLimit, tokenToWethRate);
-    
+
     // Calculate expected time
-    uint256 expectedTime = pool.lastDistributedAt() + 
-      ((gasPrice * gasLimit * tokenToWethRate) / (INFLOW_RATE_USDC / 1e9)) / 1e9;
-    
+    uint256 expectedTime = pool.lastDistributedAt()
+      + ((gasPrice * gasLimit * tokenToWethRate) / (INFLOW_RATE_USDC / 1e9)) / 1e9;
+
     assertEq(nextDistTime, expectedTime);
   }
 
@@ -833,11 +822,7 @@ contract SuperDCAPoolV1Test is Test {
     // Test valid input token (USDCx) with CFA
     vm.startPrank(HOST_SUPERFLUID);
     bytes memory result = pool.beforeAgreementCreated(
-      ISuperToken(USDCX),
-      CFA_SUPERFLUID,
-      bytes32(0),
-      new bytes(0),
-      new bytes(0)
+      ISuperToken(USDCX), CFA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0)
     );
     assertEq(result.length, 0); // Should return empty bytes for valid case
     vm.stopPrank();
@@ -845,11 +830,7 @@ contract SuperDCAPoolV1Test is Test {
     // Test valid output token (WETHx) with IDA
     vm.startPrank(HOST_SUPERFLUID);
     result = pool.beforeAgreementCreated(
-      ISuperToken(WETHX),
-      IDA_SUPERFLUID,
-      bytes32(0),
-      new bytes(0),
-      new bytes(0)
+      ISuperToken(WETHX), IDA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0)
     );
     assertEq(result.length, 0); // Should return empty bytes for valid case
     vm.stopPrank();
@@ -858,11 +839,7 @@ contract SuperDCAPoolV1Test is Test {
     vm.startPrank(HOST_SUPERFLUID);
     vm.expectRevert("!token");
     pool.beforeAgreementCreated(
-      ISuperToken(USDCX),
-      IDA_SUPERFLUID,
-      bytes32(0),
-      new bytes(0),
-      new bytes(0)
+      ISuperToken(USDCX), IDA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0)
     );
     vm.stopPrank();
 
@@ -870,58 +847,46 @@ contract SuperDCAPoolV1Test is Test {
     vm.startPrank(HOST_SUPERFLUID);
     vm.expectRevert("!token");
     pool.beforeAgreementCreated(
-      ISuperToken(WETHX),
-      CFA_SUPERFLUID,
-      bytes32(0),
-      new bytes(0),
-      new bytes(0)
+      ISuperToken(WETHX), CFA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0)
     );
     vm.stopPrank();
 
     // Test invalid: non-host caller (should revert)
     vm.expectRevert("!host");
     pool.beforeAgreementCreated(
-      ISuperToken(USDCX),
-      CFA_SUPERFLUID,
-      bytes32(0),
-      new bytes(0),
-      new bytes(0)
+      ISuperToken(USDCX), CFA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0)
     );
   }
 
   function testFork_DistributeWithContext() public {
     // Create flow for alice first
     _createFlow(alice, USDCX, address(pool), uint96(INFLOW_RATE_USDC));
-    
+
     // Skip a few minutes
     skip(5 minutes);
-    
+
     // Create flow for bob directly
     vm.startPrank(bob);
     ICFAForwarder(CFA_FORWARDER).createFlow(
-      ISuperToken(USDCX),
-      bob,
-      address(pool),
-      int96(int256(INFLOW_RATE_USDC)),
-      "hello"
+      ISuperToken(USDCX), bob, address(pool), int96(int256(INFLOW_RATE_USDC)), "hello"
     );
     vm.stopPrank();
-    
+
     // Skip some more time to accumulate balance
     skip(1 days);
 
     vm.startPrank(HOST_SUPERFLUID);
-    
+
     // Call distribute with the specific context
     pool.distribute(new bytes(0), false);
-        
+
     // Verify the distribution happened by checking both balances increased
     uint256 aliceBalance = ISuperToken(WETHX).balanceOf(alice);
     uint256 bobBalance = ISuperToken(WETHX).balanceOf(bob);
-    
+
     assertGt(aliceBalance, 0, "Alice should have received WETHx");
     assertGt(bobBalance, 0, "Bob should have received WETHx");
-    
+
     // Since Alice started streaming first, she should have more balance
     assertGt(aliceBalance, bobBalance, "Alice should have more WETHx than Bob");
 
@@ -932,78 +897,47 @@ contract SuperDCAPoolV1Test is Test {
     // Try to call beforeAgreementCreated directly (not as host)
     vm.expectRevert("!host");
     pool.beforeAgreementCreated(
-      ISuperToken(USDCX),
-      CFA_SUPERFLUID,
-      bytes32(0),
-      new bytes(0),
-      new bytes(0)
+      ISuperToken(USDCX), CFA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0)
     );
 
     // Try to call afterAgreementCreated directly (not as host)
     vm.expectRevert("!host");
     pool.afterAgreementCreated(
-      ISuperToken(USDCX),
-      CFA_SUPERFLUID,
-      bytes32(0),
-      new bytes(0),
-      new bytes(0),
-      new bytes(0)
+      ISuperToken(USDCX), CFA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0), new bytes(0)
     );
 
     // Try to call beforeAgreementUpdated directly (not as host)
     vm.expectRevert("!host");
     pool.beforeAgreementUpdated(
-      ISuperToken(USDCX),
-      CFA_SUPERFLUID,
-      bytes32(0),
-      new bytes(0),
-      new bytes(0)
+      ISuperToken(USDCX), CFA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0)
     );
 
     // Try to call afterAgreementUpdated directly (not as host)
     vm.expectRevert("!host");
     pool.afterAgreementUpdated(
-      ISuperToken(USDCX),
-      CFA_SUPERFLUID,
-      bytes32(0),
-      new bytes(0),
-      new bytes(0),
-      new bytes(0)
+      ISuperToken(USDCX), CFA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0), new bytes(0)
     );
 
     // Try to call beforeAgreementTerminated directly (not as host)
     vm.expectRevert("!host");
     pool.beforeAgreementTerminated(
-      ISuperToken(USDCX),
-      CFA_SUPERFLUID,
-      bytes32(0),
-      new bytes(0),
-      new bytes(0)
+      ISuperToken(USDCX), CFA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0)
     );
 
     // Try to call afterAgreementTerminated directly (not as host)
     vm.expectRevert("!host");
     pool.afterAgreementTerminated(
-      ISuperToken(USDCX),
-      CFA_SUPERFLUID,
-      bytes32(0),
-      new bytes(0),
-      new bytes(0),
-      new bytes(0)
+      ISuperToken(USDCX), CFA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0), new bytes(0)
     );
 
     // Now test calling as host (should succeed)
     vm.startPrank(HOST_SUPERFLUID);
-    
+
     // These should not revert
     bytes memory result = pool.beforeAgreementCreated(
-      ISuperToken(USDCX),
-      CFA_SUPERFLUID,
-      bytes32(0),
-      new bytes(0),
-      new bytes(0)
+      ISuperToken(USDCX), CFA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0)
     );
-    
+
     // Verify we got a response (even if empty)
     assertEq(result.length, 0);
 
@@ -1030,21 +964,21 @@ contract SuperDCAPoolV1Test is Test {
     fees[1] = 500;
 
     SuperDCAPoolV1.InitParams memory params = SuperDCAPoolV1.InitParams({
-        host: ISuperfluid(HOST_SUPERFLUID),
-        cfa: IConstantFlowAgreementV1(CFA_SUPERFLUID),
-        ida: IInstantDistributionAgreementV1(IDA_SUPERFLUID),
-        weth: IWETH(WETH),
-        wethx: ISuperToken(WETHX),
-        inputToken: ISuperToken(USDCX),
-        outputToken: ISuperToken(WETHX),
-        router: ISwapRouter02(UNISWAP_ROUTER),
-        uniswapFactory: IUniswapV3Factory(UNISWAP_FACTORY),
-        uniswapPath: path,
-        poolFees: fees,
-        priceFeed: AggregatorV3Interface(address(0)), // Zero address price feed
-        invertPrice: false,
-        registrationKey: "k1",
-        ops: payable(GELATO_OPS)
+      host: ISuperfluid(HOST_SUPERFLUID),
+      cfa: IConstantFlowAgreementV1(CFA_SUPERFLUID),
+      ida: IInstantDistributionAgreementV1(IDA_SUPERFLUID),
+      weth: IWETH(WETH),
+      wethx: ISuperToken(WETHX),
+      inputToken: ISuperToken(USDCX),
+      outputToken: ISuperToken(WETHX),
+      router: ISwapRouter02(UNISWAP_ROUTER),
+      uniswapFactory: IUniswapV3Factory(UNISWAP_FACTORY),
+      uniswapPath: path,
+      poolFees: fees,
+      priceFeed: AggregatorV3Interface(address(0)), // Zero address price feed
+      invertPrice: false,
+      registrationKey: "k1",
+      ops: payable(GELATO_OPS)
     });
 
     newPool.initialize(params);
@@ -1058,24 +992,22 @@ contract SuperDCAPoolV1Test is Test {
   function testFork_EmitsErrorEventOnRefundFailure() public {
     // Create flow for alice
     _createFlow(alice, USDCX, address(pool), uint96(INFLOW_RATE_USDC));
-    
+
     // Skip some time to accumulate uninvested amount
     skip(1 hours);
-    
+
     // Mock the SuperToken to make transferFrom revert
     vm.mockCallRevert(
-        USDCX,
-        abi.encodeWithSelector(ISuperToken.transferFrom.selector),
-        "TRANSFER_FAILED"
+      USDCX, abi.encodeWithSelector(ISuperToken.transferFrom.selector), "TRANSFER_FAILED"
     );
-    
+
     // Watch for the error event emission
     vm.expectEmit(true, true, true, true);
     emit SuperDCAPoolV1.ErrorRefundingUninvestedAmount(alice, INFLOW_RATE_USDC * 1 hours);
-    
+
     // Close the stream which should trigger the refund attempt
     _deleteFlow(alice);
-    
+
     // Clear the mock to not affect other tests
     vm.clearMockedCalls();
   }
@@ -1083,14 +1015,14 @@ contract SuperDCAPoolV1Test is Test {
   function testFork_EmitsRefundEventOnSuccess() public {
     // Create flow for alice
     _createFlow(alice, USDCX, address(pool), uint96(INFLOW_RATE_USDC));
-    
+
     // Skip some time to accumulate uninvested amount
     skip(1 hours);
-    
+
     // Watch for the refund event emission
     vm.expectEmit(true, true, true, true);
     emit SuperDCAPoolV1.RefundedUninvestedAmount(alice, INFLOW_RATE_USDC * 1 hours);
-    
+
     // Close the stream which should trigger the refund
     _deleteFlow(alice);
   }

@@ -778,7 +778,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
   {
     int96 netFlow = cfa.getNetFlow(inputToken, address(this));
     if (netFlow == 0) return type(uint256).max;
-    
+
     uint256 inflowRate = uint256(int256(netFlow)) / (10 ** 9);
     uint256 tokenAmount = gasPrice * gasLimit * tokenToWethRate;
     uint256 timeToDistribute = (tokenAmount / inflowRate) / (10 ** 9);

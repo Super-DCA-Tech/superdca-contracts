@@ -18,7 +18,6 @@
   fuzz = { runs = 5000 }
   invariant = { runs = 1000 }
 
-
 [profile.lite]
   fuzz = { runs = 50 }
   invariant = { runs = 10 }
