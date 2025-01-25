@@ -25,8 +25,6 @@ import "./external/superfluid/ISETHCustom.sol";
 import "./external/weth/IWETH.sol";
 import "./SuperDCATrade.sol";
 
-import "forge-std/console.sol";
-
 contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
   using SafeERC20 for ERC20;
   using Counters for Counters.Counter;
@@ -110,6 +108,9 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
   uint256 public constant GROWTH_FACTOR = 2; // Simple multiplier of 2
   uint256 public constant MAX_HOURS_PAST_INTERVAL = 10; // Maximum hours past the interval to
     // consider
+
+  bytes internal encodedSwapPath;
+  bytes internal encodedGasPath;
 
   /// @dev Swap data for performance tracking overtime
   /// @param inputAmount The amount of inputToken swapped
@@ -219,6 +220,17 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
       );
     }
 
+    // Precompute the encoded swap path
+    for (uint256 i = 0; i < uniswapPath.length; i++) {
+      if (i == uniswapPath.length - 1) {
+        encodedSwapPath = abi.encodePacked(encodedSwapPath, uniswapPath[i]);
+      } else {
+        encodedSwapPath = abi.encodePacked(encodedSwapPath, uniswapPath[i], poolFees[i]);
+      }
+    }
+    // Pre-compute the gas path
+    encodedGasPath = abi.encodePacked(address(weth), GELATO_GAS_POOL_FEE, underlyingInputToken);
+
     // Require that the pool for gas reimbursements exists
     if (address(underlyingInputToken) != address(weth)) {
       require(
@@ -314,7 +326,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
     // gelatoFeeShare reserves some underlyingInputToken for gas reimbursement
     // Use this amount to swap for enough WETH to cover the gas fee
     ISwapRouter02.ExactOutputParams memory params = ISwapRouter02.ExactOutputParams({
-      path: abi.encodePacked(address(weth), GELATO_GAS_POOL_FEE, underlyingInputToken),
+      path: encodedGasPath,
       recipient: address(this),
       amountOut: amountOut,
       amountInMaximum: type(uint256).max
@@ -329,8 +341,6 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
   // @dev This function has grown to do far more than just swap, this needs to be refactored
   function _swap(uint256 amount) internal returns (uint256 outAmount, uint256 latestPrice) {
     // Downgrade if this is not a supertoken
-    console.log("underlyingInputToken", underlyingInputToken);
-    console.log("inputToken", address(inputToken));
     if (underlyingInputToken != address(inputToken) && underlyingInputToken != address(weth)) {
       inputToken.downgrade(inputToken.balanceOf(address(this)));
     } else if (underlyingInputToken == address(weth)) {
@@ -345,16 +355,9 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
     // Record the latest price from the oracle for easy performance tracking
     latestPrice = uint256(int256(getLatestPrice()));
 
-    // Encode the path for swap
-    bytes memory encodedPath;
-    for (uint256 i = 0; i < uniswapPath.length; i++) {
-      if (i == uniswapPath.length - 1) encodedPath = abi.encodePacked(encodedPath, uniswapPath[i]);
-      else encodedPath = abi.encodePacked(encodedPath, uniswapPath[i], poolFees[i]);
-    }
-
     // This is the code for the uniswap
     ISwapRouter02.ExactInputParams memory params = ISwapRouter02.ExactInputParams({
-      path: encodedPath,
+      path: encodedSwapPath,
       recipient: address(this),
       amountIn: amount,
       // Disabled on this version since initial liquidity for SuperDCA liquidity Network is low
