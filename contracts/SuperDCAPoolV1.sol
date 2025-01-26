@@ -135,13 +135,21 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
 
   event StakeReturned(address indexed executor, uint256 amount);
 
+  error AlreadyInitialized();
+  error InvalidHost();
+  error InvalidToken();
+  error PoolDoesNotExist();
+  error NotClosable();
+  error StakeTooLow();
+  error NotCurrentExecutor();
+
   constructor(address payable _ops) AutomateTaskCreator(_ops) {
     // Deploy Trade for trade tracking
     dcaTrade = new SuperDCATrade();
   }
 
   function initialize(InitParams memory params) public {
-    require(address(inputToken) == address(0), "Already initialized");
+    if (address(inputToken) != address(0)) revert AlreadyInitialized();
 
     // Initialize Superfluid
     host = params.host;
@@ -224,11 +232,10 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
 
     // Require that the pool for input/output swaps exists
     for (uint256 i = 0; i < uniswapPath.length - 1; i++) {
-      require(
+      if (
         factory.getPool(address(uniswapPath[i]), address(uniswapPath[i + 1]), poolFees[i])
-          != address(0),
-        "PDNE"
-      );
+          == address(0)
+      ) revert PoolDoesNotExist();
     }
 
     // Precompute the encoded swap path
@@ -244,11 +251,10 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
 
     // Require that the pool for gas reimbursements exists
     if (address(underlyingInputToken) != address(weth)) {
-      require(
+      if (
         factory.getPool(address(weth), address(underlyingInputToken), GELATO_GAS_POOL_FEE)
-          != address(0),
-        "PDNE"
-      );
+          == address(0)
+      ) revert PoolDoesNotExist();
     }
 
     // Approve Uniswap Router to spend
@@ -451,11 +457,10 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
     // Make sure the agreement is either:
     // - inputToken and CFAv1
     // - outputToken and IDAv1
-    require(
-      (_isInputToken(_superToken) && _isCFAv1(_agreementClass))
-        || (_isOutputToken(_superToken) && _isIDAv1(_agreementClass)),
-      "!token"
-    );
+    if (
+      !(_isInputToken(_superToken) && _isCFAv1(_agreementClass))
+        && !(_isOutputToken(_superToken) && _isIDAv1(_agreementClass))
+    ) revert InvalidToken();
 
     // If this isn't a CFA Agreement class, return the context and be done
     if (!_isCFAv1(_agreementClass)) return _ctx;
@@ -744,7 +749,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
 
   /// @dev Restricts calls to only from SuperFluid host
   function _onlyHost() internal view {
-    require(msg.sender == address(host), "!host");
+    if (msg.sender != address(host)) revert InvalidHost();
   }
 
   /// @dev Calculate the uninvested amount for the user based on the flow rate and last update time
@@ -852,8 +857,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
   function closeStream(address streamer, ISuperToken token) public {
     // Only closable iff their balance is less than 8 hours of streaming
     (, int96 streamerFlowRate,,) = cfa.getFlow(token, streamer, address(this));
-    // int96 streamerFlowRate = getStreamRate(token, streamer);
-    require(int256(token.balanceOf(streamer)) <= streamerFlowRate * 8 hours, "!closable");
+    if (int256(token.balanceOf(streamer)) > streamerFlowRate * 8 hours) revert NotClosable();
 
     // Close the streamers stream
     // Does this trigger before/afterAgreementTerminated
@@ -926,7 +930,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
   /// @dev Must stake more than current stake to become executor
   /// @param amount Amount of tokens to stake
   function stake(uint256 amount) external {
-    require(amount > currentStake, "STL");
+    if (amount <= currentStake) revert StakeTooLow();
 
     // Transfer new stake from caller
     ERC20(STAKING_TOKEN_ADDRESS).transferFrom(msg.sender, address(this), amount);
@@ -948,7 +952,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator {
   /// @notice Withdraw stake if no longer executor
   /// @dev Only callable by previous executor if outbid
   function unstake() external {
-    require(msg.sender == currentExecutor, "NCE");
+    if (msg.sender != currentExecutor) revert NotCurrentExecutor();
 
     uint256 stakeAmount = currentStake;
     currentStake = 0;

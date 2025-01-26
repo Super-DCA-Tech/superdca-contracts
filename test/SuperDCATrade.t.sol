@@ -18,7 +18,7 @@ contract SuperDCATradeTest is Test {
   }
 
   // Constructor Tests
-  function test_InitialState() public {
+  function test_InitialState() public view {
     assertEq(superDCA.name(), "SuperDCA Trade");
     assertEq(superDCA.symbol(), "SDCA");
     assertEq(superDCA.owner(), owner);

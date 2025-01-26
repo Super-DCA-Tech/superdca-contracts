@@ -458,7 +458,7 @@ contract SuperDCAPoolV1Test is Test {
     _createFlow(alice, USDCX, address(pool), uint96(INFLOW_RATE_USDC));
 
     // Should revert when trying to close stream with sufficient balance
-    vm.expectRevert("!closable");
+    vm.expectRevert(SuperDCAPoolV1.NotClosable.selector);
     pool.closeStream(alice, ISuperToken(USDCX));
   }
 
@@ -535,7 +535,7 @@ contract SuperDCAPoolV1Test is Test {
     });
 
     // Attempt to initialize again should revert
-    vm.expectRevert("Already initialized");
+    vm.expectRevert(SuperDCAPoolV1.AlreadyInitialized.selector);
     pool.initialize(params);
   }
 
@@ -614,7 +614,7 @@ contract SuperDCAPoolV1Test is Test {
     });
 
     // Attempt to initialize with nonexistent pool should revert
-    vm.expectRevert(); // Pool Does Not Exist
+    vm.expectRevert(SuperDCAPoolV1.PoolDoesNotExist.selector);
     newPool.initialize(params);
     vm.stopPrank();
   }
@@ -665,7 +665,7 @@ contract SuperDCAPoolV1Test is Test {
     );
 
     // Attempt to initialize with nonexistent gas pool should revert
-    vm.expectRevert(); // Pool Does Not Exist
+    vm.expectRevert(SuperDCAPoolV1.PoolDoesNotExist.selector);
     newPool.initialize(params);
     vm.stopPrank();
 
@@ -837,7 +837,7 @@ contract SuperDCAPoolV1Test is Test {
 
     // Test invalid: input token with IDA (should revert)
     vm.startPrank(HOST_SUPERFLUID);
-    vm.expectRevert("!token");
+    vm.expectRevert(SuperDCAPoolV1.InvalidToken.selector);
     pool.beforeAgreementCreated(
       ISuperToken(USDCX), IDA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0)
     );
@@ -845,14 +845,14 @@ contract SuperDCAPoolV1Test is Test {
 
     // Test invalid: output token with CFA (should revert)
     vm.startPrank(HOST_SUPERFLUID);
-    vm.expectRevert("!token");
+    vm.expectRevert(SuperDCAPoolV1.InvalidToken.selector);
     pool.beforeAgreementCreated(
       ISuperToken(WETHX), CFA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0)
     );
     vm.stopPrank();
 
     // Test invalid: non-host caller (should revert)
-    vm.expectRevert("!host");
+    vm.expectRevert(SuperDCAPoolV1.InvalidHost.selector);
     pool.beforeAgreementCreated(
       ISuperToken(USDCX), CFA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0)
     );
@@ -895,37 +895,37 @@ contract SuperDCAPoolV1Test is Test {
 
   function testFork_OnlyHostModifier() public {
     // Try to call beforeAgreementCreated directly (not as host)
-    vm.expectRevert("!host");
+    vm.expectRevert(SuperDCAPoolV1.InvalidHost.selector);
     pool.beforeAgreementCreated(
       ISuperToken(USDCX), CFA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0)
     );
 
     // Try to call afterAgreementCreated directly (not as host)
-    vm.expectRevert("!host");
+    vm.expectRevert(SuperDCAPoolV1.InvalidHost.selector);
     pool.afterAgreementCreated(
       ISuperToken(USDCX), CFA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0), new bytes(0)
     );
 
     // Try to call beforeAgreementUpdated directly (not as host)
-    vm.expectRevert("!host");
+    vm.expectRevert(SuperDCAPoolV1.InvalidHost.selector);
     pool.beforeAgreementUpdated(
       ISuperToken(USDCX), CFA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0)
     );
 
     // Try to call afterAgreementUpdated directly (not as host)
-    vm.expectRevert("!host");
+    vm.expectRevert(SuperDCAPoolV1.InvalidHost.selector);
     pool.afterAgreementUpdated(
       ISuperToken(USDCX), CFA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0), new bytes(0)
     );
 
     // Try to call beforeAgreementTerminated directly (not as host)
-    vm.expectRevert("!host");
+    vm.expectRevert(SuperDCAPoolV1.InvalidHost.selector);
     pool.beforeAgreementTerminated(
       ISuperToken(USDCX), CFA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0)
     );
 
     // Try to call afterAgreementTerminated directly (not as host)
-    vm.expectRevert("!host");
+    vm.expectRevert(SuperDCAPoolV1.InvalidHost.selector);
     pool.afterAgreementTerminated(
       ISuperToken(USDCX), CFA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0), new bytes(0)
     );
@@ -1059,7 +1059,7 @@ contract SuperDCAPoolV1Test is Test {
     deal(pool.STAKING_TOKEN_ADDRESS(), bob, bobLowerStake);
     vm.startPrank(bob);
     IERC20(pool.STAKING_TOKEN_ADDRESS()).approve(address(pool), bobLowerStake);
-    vm.expectRevert();
+    vm.expectRevert(SuperDCAPoolV1.StakeTooLow.selector);
     pool.stake(bobLowerStake);
     vm.stopPrank();
 
@@ -1111,7 +1111,7 @@ contract SuperDCAPoolV1Test is Test {
 
     // Bob shouldn't be able to unstake (wasn't previous executor)
     vm.startPrank(bob);
-    vm.expectRevert();
+    vm.expectRevert(SuperDCAPoolV1.NotCurrentExecutor.selector);
     pool.unstake();
     vm.stopPrank();
 
