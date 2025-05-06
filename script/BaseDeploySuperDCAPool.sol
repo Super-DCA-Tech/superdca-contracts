@@ -9,6 +9,9 @@ import {
   IConstantFlowAgreementV1,
   ISuperToken
 } from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
+import {IInstantDistributionAgreementV1} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IInstantDistributionAgreementV1.sol";
+import {AggregatorV3Interface} from "@chainlink/contracts/interfaces/AggregatorV3Interface.sol";
+import {IWETH} from "../contracts/interface/IWETH.sol";
 
 abstract contract BaseDeploySuperDCAPool is Script {
   struct NetworkConfiguration {
@@ -26,10 +29,10 @@ abstract contract BaseDeploySuperDCAPool is Script {
     address dai;
     address wethx;
     address weth;
-    // Uniswap
-    address uniswapV3Router;
-    address uniswapV3Factory;
-    uint24 uniswapPoolFee;
+    // Uniswap V4
+    address universalRouter;
+    address poolManager;
+    address permit2;
     // Chainlink
     address chainlinkEthUsdc;
     address chainlinkUsdcUsd;
@@ -60,18 +63,10 @@ abstract contract BaseDeploySuperDCAPool is Script {
     // Set configuration explicitly in each network's deploy script
     NetworkConfiguration memory config = getConfiguration();
 
-    // Deploy the pool
-    SuperDCAPoolV1 pool = new SuperDCAPoolV1(payable(config.gelatoAutomate));
-
-    // Setup initialization params
-    address[] memory path = new address[](3);
-    path[0] = config.usdc;
-    path[1] = config.dcaToken;
-    path[2] = config.weth;
-
-    uint24[] memory fees = new uint24[](2);
-    fees[0] = config.uniswapPoolFee;
-    fees[1] = config.uniswapPoolFee;
+    // Deploy the pool - pass the correct V4 addresses to constructor
+    SuperDCAPoolV1 pool = new SuperDCAPoolV1(
+      payable(config.gelatoAutomate), config.universalRouter, config.poolManager, config.permit2
+    );
 
     SuperDCAPoolV1.InitParams memory params = SuperDCAPoolV1.InitParams({
       host: ISuperfluid(config.hostSuperfluid),
@@ -81,19 +76,16 @@ abstract contract BaseDeploySuperDCAPool is Script {
       wethx: ISuperToken(config.wethx),
       inputToken: ISuperToken(config.usdcx),
       outputToken: ISuperToken(config.wethx),
-      router: ISwapRouter(config.uniswapV3Router),
-      uniswapFactory: IUniswapV3Factory(config.uniswapV3Factory),
-      uniswapPath: path,
-      poolFees: fees,
       priceFeed: AggregatorV3Interface(config.chainlinkEthUsdc),
       invertPrice: false,
       registrationKey: config.sfRegKey,
       automate: payable(config.gelatoAutomate)
     });
 
-    // Initialize the pool
+    // Initialize the pool with the correct params
     pool.initialize(params);
 
+    vm.stopBroadcast();
     return (pool, pool.dcaTrade());
   }
 }
