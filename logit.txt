@@ -1,0 +1,28 @@
+No files changed, compilation skipped
+
+Ran 1 test for test/SuperDCAPoolV1.t.sol:SuperDCAPoolV1Test
+[PASS] testFork_StreamersWithTheSameFlowRateGetTheSameDeal() (gas: 3077992)
+Logs:
+  inputTokenAmount 0
+  inputTokenAmount 172800000000000000
+  underlyingBalance 172800
+  gelatoFeeShare 10000000000000000
+  latestPrice 243919001579
+  --------------------------------
+  Swapping
+  inputToken 172800
+  weth 172800
+  eth 0
+  outputToken 0
+  amount 172800
+  --------------------------------
+  Swapped
+  outputTokenAmount 69776199430684
+  balanceOf outputToken 0
+  balanceOf inputToken 0
+  balanceOf eth 69776199430684
+  --------------------------------
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 455.36ms (26.66ms CPU time)
+
+Ran 1 test suite in 747.39ms (455.36ms CPU time): 1 tests passed, 0 failed, 0 skipped (1 total tests)

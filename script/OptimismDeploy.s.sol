@@ -24,10 +24,10 @@ contract OptimismDeploy is BaseDeploySuperDCAPool {
       dai: 0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1,
       wethx: 0x4ac8bD1bDaE47beeF2D1c6Aa62229509b962Aa0d,
       weth: 0x4200000000000000000000000000000000000006,
-      // Uniswap
-      uniswapV3Router: 0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45,
-      uniswapV3Factory: 0x1F98431c8aD98523631AE4a59f267346ea31F984,
-      uniswapPoolFee: 500,
+      // Uniswap V4
+      universalRouter: 0x851116D9223fabED8E56C0E6b8Ad0c31d98B3507,
+      poolManager: 0x9a13F98Cb987694C9F086b1F5eB990EeA8264Ec3,
+      permit2: 0x000000000022D473030F116dDEE9F6B43aC78BA3,
       // Chainlink
       chainlinkEthUsdc: 0x13e3Ee699D1909E989722E753853AE30b17e08c5,
       chainlinkUsdcUsd: 0x16a9FA2FDa030272Ce99B29CF780dFA30361E0f3,

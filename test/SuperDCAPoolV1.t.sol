@@ -1,11 +1,11 @@
-// SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.23;
+pragma solidity ^0.8.28;
 // forge imports
 
 import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
 import {SuperDCAPoolV1} from "../contracts/SuperDCAPoolV1.sol";
 import {SuperDCATrade} from "../contracts/SuperDCATrade.sol";
+import {SuperDCAPoolStaking} from "../contracts/pool/SuperDCAPoolStaking.sol";
 import {ICFAForwarder} from "./interfaces/ICFAForwarder.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/interfaces/AggregatorV3Interface.sol";
 import {IWETH} from "../contracts/interface/IWETH.sol";
@@ -21,8 +21,6 @@ import {IConstantFlowAgreementV1} from
   "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IConstantFlowAgreementV1.sol";
 import {IInstantDistributionAgreementV1} from
   "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IInstantDistributionAgreementV1.sol";
-import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
-import {IUniswapV3Factory} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
 import {Automate} from "@gelato/contracts/Automate.sol";
 import {LibDataTypes} from "@gelato/contracts/libraries/LibDataTypes.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -33,20 +31,27 @@ contract SuperDCAPoolV1Test is Test {
   address public constant IDA_SUPERFLUID = 0xc4ce5118C3B20950ee288f086cb7FC166d222D4c;
   address public constant CFA_SUPERFLUID = 0x204C6f131bb7F258b2Ea1593f5309911d8E458eD;
   address public constant CFA_FORWARDER = 0xcfA132E353cB4E398080B9700609bb008eceB125;
-  address public constant USDCX = 0x8430F084B939208E2eDEd1584889C9A66B90562f;
-  address public constant USDC = 0x7F5c764cBc14f9669B88837ca1490cCa17c31607;
+  address public constant USDCX = 0x35Adeb0638EB192755B6E52544650603Fe65A006;
+  address public constant USDC = 0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85;
   address public constant WETHX = 0x4ac8bD1bDaE47beeF2D1c6Aa62229509b962Aa0d;
   address public constant WETH = 0x4200000000000000000000000000000000000006;
   address public constant DCA = 0xb1599CDE32181f48f89683d3C5Db5C5D2C7C93cc;
-  address public constant UNISWAP_ROUTER = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
-  address public constant UNISWAP_FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
   address public constant ETH_USDC_FEED = 0x13e3Ee699D1909E989722E753853AE30b17e08c5;
   address public constant GELATO_AUTOMATE = 0x2A6C106ae13B558BB9E2Ec64Bd2f1f7BEFF3A5E0;
   address public constant GELATO_NETWORK = 0x01051113D81D7d6DA508462F2ad6d7fD96cF42Ef;
 
+  // Uniswap V4 Optimism Mainnet
+  address constant UNIVERSAL_ROUTER = 0x851116D9223fabED8E56C0E6b8Ad0c31d98B3507;
+  address constant POOL_MANAGER = 0x9a13F98Cb987694C9F086b1F5eB990EeA8264Ec3;
+  address constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
+  address constant ETH_ADDRESS = 0x0000000000000000000000000000000000000000;
+  address constant USDC_ADDRESS = 0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85;
+  address constant UNI_ADDRESS = 0x6fd9d7AD17242c41f7131d257212c54A0e816691;
+  address constant DCA_ADDRESS = 0xb1599CDE32181f48f89683d3C5Db5C5D2C7C93cc;
+
   // Details need to deploy as an approved deployer for SF
   address public constant AUTHORIZED_DEPLOYER = 0x744f96332713EFC378e334A7eccAEc8E19532100;
-  uint256 public constant FORK_BLOCK_NUMBER = 120_269_002;
+  uint256 public constant FORK_BLOCK_NUMBER = 135_643_157; // May 10, 2025
 
   // Simulation constants
   uint256 public constant UPGRADE_AMOUNT = 1e18;
@@ -85,17 +90,7 @@ contract SuperDCAPoolV1Test is Test {
     vm.createSelectFork(vm.rpcUrl("optimism"), FORK_BLOCK_NUMBER);
 
     vm.startPrank(AUTHORIZED_DEPLOYER, AUTHORIZED_DEPLOYER);
-    pool = new SuperDCAPoolV1(payable(GELATO_AUTOMATE));
-
-    // Setup initialization params
-    address[] memory path = new address[](3);
-    path[0] = USDC;
-    path[1] = DCA;
-    path[2] = WETH;
-
-    uint24[] memory fees = new uint24[](2);
-    fees[0] = 500;
-    fees[1] = 500;
+    pool = new SuperDCAPoolV1(payable(GELATO_AUTOMATE), UNIVERSAL_ROUTER, POOL_MANAGER, PERMIT2);
 
     SuperDCAPoolV1.InitParams memory params = SuperDCAPoolV1.InitParams({
       host: ISuperfluid(HOST_SUPERFLUID),
@@ -105,10 +100,6 @@ contract SuperDCAPoolV1Test is Test {
       wethx: ISuperToken(WETHX),
       inputToken: ISuperToken(USDCX),
       outputToken: ISuperToken(WETHX),
-      router: ISwapRouter(UNISWAP_ROUTER),
-      uniswapFactory: IUniswapV3Factory(UNISWAP_FACTORY),
-      uniswapPath: path,
-      poolFees: fees,
       priceFeed: AggregatorV3Interface(ETH_USDC_FEED),
       invertPrice: false,
       registrationKey: "k1",
@@ -243,7 +234,8 @@ contract SuperDCAPoolV1Test is Test {
     uint256 firstDayEarnings = aliceBalanceInitial;
     uint256 secondDayEarnings = aliceBalanceFinal - aliceBalanceInitial;
 
-    assertApproxEqRel(secondDayEarnings, firstDayEarnings * 2, 0.01e18); // 1% tolerance
+    // 3% tolerance, uniswap v4 pools have low liquidity at this test block
+    assertApproxEqRel(secondDayEarnings, firstDayEarnings * 2, 0.03e18);
   }
 
   function testFork_StreamerCanCloseStream() public {
@@ -403,11 +395,11 @@ contract SuperDCAPoolV1Test is Test {
     assertGt(aliceFinalBalance, aliceInitialBalance);
 
     // Get oracle price for comparison
-    int256 oraclePrice = pool.getLatestPrice();
+    uint256 oraclePrice = pool.getLatestPrice();
 
     // Calculate expected minimum output considering 2% slippage/fees
     uint256 inputAmount = uint256(int256(flowRate) * (2 days));
-    uint256 minExpectedOutput = (inputAmount * 98) / (uint256(oraclePrice) * 100);
+    uint256 minExpectedOutput = (inputAmount * 98) / (oraclePrice * 100);
 
     // Verify Alice got at least the minimum expected amount
     assertGt(aliceFinalBalance - aliceInitialBalance, minExpectedOutput);
@@ -513,16 +505,6 @@ contract SuperDCAPoolV1Test is Test {
   function testFork_CannotInitializeTwice() public {
     // First initialization happens in setUp()
 
-    // Setup initialization params again
-    address[] memory path = new address[](3);
-    path[0] = USDC;
-    path[1] = DCA;
-    path[2] = WETH;
-
-    uint24[] memory fees = new uint24[](2);
-    fees[0] = 500;
-    fees[1] = 500;
-
     SuperDCAPoolV1.InitParams memory params = SuperDCAPoolV1.InitParams({
       host: ISuperfluid(HOST_SUPERFLUID),
       cfa: IConstantFlowAgreementV1(CFA_SUPERFLUID),
@@ -531,10 +513,6 @@ contract SuperDCAPoolV1Test is Test {
       wethx: ISuperToken(WETHX),
       inputToken: ISuperToken(USDCX),
       outputToken: ISuperToken(WETHX),
-      router: ISwapRouter(UNISWAP_ROUTER),
-      uniswapFactory: IUniswapV3Factory(UNISWAP_FACTORY),
-      uniswapPath: path,
-      poolFees: fees,
       priceFeed: AggregatorV3Interface(ETH_USDC_FEED),
       invertPrice: false,
       registrationKey: "k1",
@@ -549,17 +527,8 @@ contract SuperDCAPoolV1Test is Test {
   function testFork_InitializeWithEmptyRegistrationKey() public {
     // Deploy a new pool instance since the one in setUp() is already initialized
     vm.startPrank(AUTHORIZED_DEPLOYER, AUTHORIZED_DEPLOYER);
-    SuperDCAPoolV1 newPool = new SuperDCAPoolV1(payable(GELATO_AUTOMATE));
-
-    // Setup initialization params with empty registration key
-    address[] memory path = new address[](3);
-    path[0] = USDC;
-    path[1] = DCA;
-    path[2] = WETH;
-
-    uint24[] memory fees = new uint24[](2);
-    fees[0] = 500;
-    fees[1] = 500;
+    SuperDCAPoolV1 newPool =
+      new SuperDCAPoolV1(payable(GELATO_AUTOMATE), UNIVERSAL_ROUTER, POOL_MANAGER, PERMIT2);
 
     SuperDCAPoolV1.InitParams memory params = SuperDCAPoolV1.InitParams({
       host: ISuperfluid(HOST_SUPERFLUID),
@@ -569,10 +538,6 @@ contract SuperDCAPoolV1Test is Test {
       wethx: ISuperToken(WETHX),
       inputToken: ISuperToken(USDCX),
       outputToken: ISuperToken(WETHX),
-      router: ISwapRouter(UNISWAP_ROUTER),
-      uniswapFactory: IUniswapV3Factory(UNISWAP_FACTORY),
-      uniswapPath: path,
-      poolFees: fees,
       priceFeed: AggregatorV3Interface(ETH_USDC_FEED),
       invertPrice: false,
       registrationKey: "", // Empty registration key
@@ -584,157 +549,6 @@ contract SuperDCAPoolV1Test is Test {
 
     // Verify initialization was successful by checking a key parameter
     assertEq(address(newPool.inputToken()), USDCX);
-    vm.stopPrank();
-  }
-
-  function testFork_InitializeRevertsWithNonexistentPool() public {
-    // Deploy a new pool instance
-    vm.startPrank(AUTHORIZED_DEPLOYER, AUTHORIZED_DEPLOYER);
-    SuperDCAPoolV1 newPool = new SuperDCAPoolV1(payable(GELATO_AUTOMATE));
-
-    // Setup initialization params with invalid pool fee
-    address[] memory path = new address[](3);
-    path[0] = USDC;
-    path[1] = DCA;
-    path[2] = WETH;
-
-    uint24[] memory fees = new uint24[](2);
-    fees[0] = 3000; // Using 3000 bps fee which doesn't exist for this pool
-    fees[1] = 500;
-
-    SuperDCAPoolV1.InitParams memory params = SuperDCAPoolV1.InitParams({
-      host: ISuperfluid(HOST_SUPERFLUID),
-      cfa: IConstantFlowAgreementV1(CFA_SUPERFLUID),
-      ida: IInstantDistributionAgreementV1(IDA_SUPERFLUID),
-      weth: IWETH(WETH),
-      wethx: ISuperToken(WETHX),
-      inputToken: ISuperToken(USDCX),
-      outputToken: ISuperToken(WETHX),
-      router: ISwapRouter(UNISWAP_ROUTER),
-      uniswapFactory: IUniswapV3Factory(UNISWAP_FACTORY),
-      uniswapPath: path,
-      poolFees: fees,
-      priceFeed: AggregatorV3Interface(ETH_USDC_FEED),
-      invertPrice: false,
-      registrationKey: "k1",
-      automate: payable(GELATO_AUTOMATE)
-    });
-
-    // Attempt to initialize with nonexistent pool should revert
-    vm.expectRevert(SuperDCAPoolV1.PoolDoesNotExist.selector);
-    newPool.initialize(params);
-    vm.stopPrank();
-  }
-
-  function testFork_InitializeRevertsWithNonexistentGasPool() public {
-    // Deploy a new pool instance
-    vm.startPrank(AUTHORIZED_DEPLOYER, AUTHORIZED_DEPLOYER);
-    SuperDCAPoolV1 newPool = new SuperDCAPoolV1(payable(GELATO_AUTOMATE));
-
-    // Setup initialization params
-    address[] memory path = new address[](3);
-    path[0] = USDC;
-    path[1] = DCA;
-    path[2] = WETH;
-
-    uint24[] memory fees = new uint24[](2);
-    fees[0] = 500;
-    fees[1] = 500;
-
-    SuperDCAPoolV1.InitParams memory params = SuperDCAPoolV1.InitParams({
-      host: ISuperfluid(HOST_SUPERFLUID),
-      cfa: IConstantFlowAgreementV1(CFA_SUPERFLUID),
-      ida: IInstantDistributionAgreementV1(IDA_SUPERFLUID),
-      weth: IWETH(WETH),
-      wethx: ISuperToken(WETHX),
-      inputToken: ISuperToken(USDCX),
-      outputToken: ISuperToken(WETHX),
-      router: ISwapRouter(UNISWAP_ROUTER),
-      uniswapFactory: IUniswapV3Factory(UNISWAP_FACTORY),
-      uniswapPath: path,
-      poolFees: fees,
-      priceFeed: AggregatorV3Interface(ETH_USDC_FEED),
-      invertPrice: false,
-      registrationKey: "k1",
-      automate: payable(GELATO_AUTOMATE)
-    });
-
-    // Mock the Uniswap factory to return address(0) for the gas reimbursement pool
-    vm.mockCall(
-      UNISWAP_FACTORY,
-      abi.encodeWithSelector(
-        IUniswapV3Factory.getPool.selector,
-        WETH,
-        USDC,
-        500 // GELATO_GAS_POOL_FEE
-      ),
-      abi.encode(address(0))
-    );
-
-    // Attempt to initialize with nonexistent gas pool should revert
-    vm.expectRevert(SuperDCAPoolV1.PoolDoesNotExist.selector);
-    newPool.initialize(params);
-    vm.stopPrank();
-
-    // Clear the mock to not affect other tests
-    vm.clearMockedCalls();
-  }
-
-  function testFork_InitializeWithWethxOutput() public {
-    // Deploy a new pool instance
-    vm.startPrank(AUTHORIZED_DEPLOYER, AUTHORIZED_DEPLOYER);
-    SuperDCAPoolV1 newPool = new SuperDCAPoolV1(payable(GELATO_AUTOMATE));
-
-    // Setup initialization params with WETHx as output token
-    address[] memory path = new address[](3);
-    path[0] = WETH; // Note: Path is reversed compared to normal setup
-    path[1] = DCA;
-    path[2] = USDC;
-
-    uint24[] memory fees = new uint24[](2);
-    fees[0] = 500;
-    fees[1] = 500;
-
-    SuperDCAPoolV1.InitParams memory params = SuperDCAPoolV1.InitParams({
-      host: ISuperfluid(HOST_SUPERFLUID),
-      cfa: IConstantFlowAgreementV1(CFA_SUPERFLUID),
-      ida: IInstantDistributionAgreementV1(IDA_SUPERFLUID),
-      weth: IWETH(WETH),
-      wethx: ISuperToken(WETHX),
-      inputToken: ISuperToken(WETHX),
-      outputToken: ISuperToken(USDCX), // WETHx as output token
-      router: ISwapRouter(UNISWAP_ROUTER),
-      uniswapFactory: IUniswapV3Factory(UNISWAP_FACTORY),
-      uniswapPath: path,
-      poolFees: fees,
-      priceFeed: AggregatorV3Interface(ETH_USDC_FEED),
-      invertPrice: true, // Invert price since path is reversed
-      registrationKey: "k1",
-      automate: payable(GELATO_AUTOMATE)
-    });
-
-    // Initialize the pool
-    newPool.initialize(params);
-
-    // Alice approves to receive USDCX output tokens
-    _approveSubscription(alice, USDCX, address(newPool));
-
-    // Verify initialization was successful
-    assertEq(address(newPool.outputToken()), USDCX);
-    assertEq(address(newPool.wethx()), WETHX);
-
-    // Create a flow and verify the WETHx distribution works
-    _dealAndUpgrade(alice, WETH);
-    _createFlow(alice, WETHX, address(newPool), uint96(INFLOW_RATE_USDC));
-    vm.startPrank(alice);
-    skip(1 days);
-
-    newPool.distribute(new bytes(0), true);
-    uint256 aliceBalanceAfter = ISuperToken(WETHX).balanceOf(alice);
-
-    // Verify Alice received WETHx
-    assertGt(aliceBalanceAfter, 0);
-
     vm.stopPrank();
   }
 
@@ -956,12 +770,13 @@ contract SuperDCAPoolV1Test is Test {
 
   function testFork_GetLatestPrice() public {
     // Test normal case - should return price from Chainlink feed
-    int256 price = pool.getLatestPrice();
+    uint256 price = pool.getLatestPrice();
     assertGt(price, 0, "Price feed should return positive value");
 
     // Deploy new pool to test zero address case
     vm.startPrank(AUTHORIZED_DEPLOYER, AUTHORIZED_DEPLOYER);
-    SuperDCAPoolV1 newPool = new SuperDCAPoolV1(payable(GELATO_AUTOMATE));
+    SuperDCAPoolV1 newPool =
+      new SuperDCAPoolV1(payable(GELATO_AUTOMATE), UNIVERSAL_ROUTER, POOL_MANAGER, PERMIT2);
 
     // Setup initialization params with zero address price feed
     address[] memory path = new address[](3);
@@ -981,10 +796,6 @@ contract SuperDCAPoolV1Test is Test {
       wethx: ISuperToken(WETHX),
       inputToken: ISuperToken(USDCX),
       outputToken: ISuperToken(WETHX),
-      router: ISwapRouter(UNISWAP_ROUTER),
-      uniswapFactory: IUniswapV3Factory(UNISWAP_FACTORY),
-      uniswapPath: path,
-      poolFees: fees,
       priceFeed: AggregatorV3Interface(address(0)), // Zero address price feed
       invertPrice: false,
       registrationKey: "k1",
@@ -994,7 +805,7 @@ contract SuperDCAPoolV1Test is Test {
     newPool.initialize(params);
 
     // Test zero address case - should return 0
-    int256 zeroPrice = newPool.getLatestPrice();
+    uint256 zeroPrice = newPool.getLatestPrice();
     assertEq(zeroPrice, 0, "Price should be 0 when feed is zero address");
     vm.stopPrank();
   }
@@ -1070,7 +881,7 @@ contract SuperDCAPoolV1Test is Test {
     deal(pool.STAKING_TOKEN_ADDRESS(), bob, bobLowerStake);
     vm.startPrank(bob);
     IERC20(pool.STAKING_TOKEN_ADDRESS()).approve(address(pool), bobLowerStake);
-    vm.expectRevert(SuperDCAPoolV1.StakeTooLow.selector);
+    vm.expectRevert(SuperDCAPoolStaking.StakeTooLow.selector);
     pool.stake(bobLowerStake);
     vm.stopPrank();
 
@@ -1108,15 +919,15 @@ contract SuperDCAPoolV1Test is Test {
     _createFlow(bob, USDCX, address(pool), uint96(INFLOW_RATE_USDC * 10));
 
     // Record alice's initial balance
-    uint256 aliceInitialBalance = IERC20(USDC).balanceOf(alice);
+    uint256 aliceInitialBalance = alice.balance;
 
     // Skip time and distribute
     skip(1 days);
     pool.distribute(new bytes(0), true);
 
     // Verify alice (executor) received fees
-    uint256 aliceFinalBalance = IERC20(USDC).balanceOf(alice);
-    assertGt(aliceFinalBalance, aliceInitialBalance, "Executor should receive fees");
+    uint256 aliceFinalBalance = alice.balance;
+    assertGt(aliceFinalBalance, aliceInitialBalance, "Executor should receive fees in ETH");
   }
 
   function testFork_UnstakeRestrictions() public {

@@ -1,21 +1,22 @@
 [profile.default]
-  evm_version = "paris"
+  evm_version = "cancun"
+  solc_version = "0.8.29"
+  verbosity = 3
   libs = ["lib"]
+  src = "contracts"
   optimizer = true
-  optimizer_runs = 200
+  optimizer_runs = 1_000
   out = "artifacts"
   remappings = [
   '@superfluid-finance/ethereum-contracts/=lib/protocol-monorepo/packages/ethereum-contracts/',
   'forge-std/=lib/forge-std/src/',
   '@openzeppelin/=lib/openzeppelin-contracts/',
-  '@uniswap/v3-periphery/=lib/v3-periphery/',
-  '@uniswap/v3-core/=lib/v3-core/',
+  '@uniswap/v4-core/=lib/v4-core/',
+  '@uniswap/v4-periphery/=lib/v4-periphery/',
+  '@uniswap/permit2/=lib/permit2/',
   '@gelato/=lib/ops/',
   '@chainlink/contracts/=lib/chainlink/contracts/src/v0.8/shared/',
   ]
-  solc_version = "0.8.26"
-  src = "contracts"
-  verbosity = 3
 
 [profile.ci]
   fuzz = { runs = 5000 }
