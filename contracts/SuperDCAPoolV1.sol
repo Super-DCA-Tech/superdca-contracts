@@ -117,7 +117,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
     currency0: Currency.wrap(USDC_ADDRESS),
     currency1: Currency.wrap(DCA_ADDRESS),
     fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
-    tickSpacing: 10,
+    tickSpacing: 60,
     hooks: IHooks(GAUGE_HOOK_ADDRESS)
   });
 
@@ -125,7 +125,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
     currency0: Currency.wrap(ETH_ADDRESS),
     currency1: Currency.wrap(DCA_ADDRESS),
     fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
-    tickSpacing: 10,
+    tickSpacing: 60,
     hooks: IHooks(GAUGE_HOOK_ADDRESS)
   });
 

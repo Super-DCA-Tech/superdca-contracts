@@ -52,7 +52,7 @@ contract SuperDCAPoolV1Test is Test {
 
   // Details need to deploy as an approved deployer for SF
   address public constant AUTHORIZED_DEPLOYER = 0x744f96332713EFC378e334A7eccAEc8E19532100;
-  uint256 public constant FORK_BLOCK_NUMBER = 135_643_157; // May 10, 2025
+  uint256 public constant FORK_BLOCK_NUMBER = 135_818_279; // May 14, 2025
 
   // Simulation constants
   uint256 public constant UPGRADE_AMOUNT = 1e18;

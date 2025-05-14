@@ -53,6 +53,7 @@ abstract contract BaseDeploySuperDCAPool is Script {
 
   function setUp() public virtual {
     deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+    console.log("Deployer address:", vm.addr(deployerPrivateKey));
   }
 
   function getConfiguration() public virtual returns (NetworkConfiguration memory);
