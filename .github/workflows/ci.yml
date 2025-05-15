@@ -23,6 +23,7 @@ jobs:
       - name: Build contracts
         run: |
           forge --version
+          forge install
           forge build --sizes
 
   test:
@@ -34,7 +35,9 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
 
       - name: Run tests
-        run: forge test
+        run: |
+          forge install > /dev/null
+          forge test
 
   coverage:
     runs-on: ubuntu-latest
@@ -47,7 +50,9 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
 
       - name: Run coverage
-        run: forge coverage --report summary --report lcov
+        run: |
+          forge install > /dev/null
+          forge coverage --report summary --report lcov
 
       # To ignore coverage for certain directories modify the paths in this step as needed. The
       # below default ignores coverage results for the test and script directories. Alternatively,
