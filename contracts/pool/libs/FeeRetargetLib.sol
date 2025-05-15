@@ -13,24 +13,30 @@ library FeeRetargetLib {
   /// @param currentFeeShare Current share (18-dec fixed-point, where 1e18 = 100%).
   /// @param lastDistributedAt Timestamp of previous distribution.
   /// @param distributionInterval Target interval.
+  /// @param minFeeShare Minimum fee share allowed (dynamic based on maxHalvings).
+  /// @param maxFeeShare Maximum fee share allowed (still capped at a global constant).
   /// @return adjustedFeeShare New fee share to apply.
   function adjustFeeShare(
     uint256 currentFeeShare,
     uint256 lastDistributedAt,
-    uint256 distributionInterval
+    uint256 distributionInterval,
+    uint256 minFeeShare,
+    uint256 maxFeeShare
   ) internal view returns (uint256 adjustedFeeShare) {
     uint256 timeSinceLast = block.timestamp - lastDistributedAt;
 
     if (timeSinceLast > distributionInterval) {
+      // Increase fee share when executor runs the task late
       uint256 hoursPast = (timeSinceLast - distributionInterval) / 1 hours;
       if (hoursPast > MAX_HOURS_PAST_INTERVAL) hoursPast = MAX_HOURS_PAST_INTERVAL;
       if (hoursPast == 0) return currentFeeShare;
 
       adjustedFeeShare = currentFeeShare * (GROWTH_FACTOR ** hoursPast);
-      if (adjustedFeeShare > MAX_FEE_SHARE) adjustedFeeShare = MAX_FEE_SHARE;
+      if (adjustedFeeShare > maxFeeShare) adjustedFeeShare = maxFeeShare;
     } else {
+      // Halve the fee share when the executor runs on time
       adjustedFeeShare = currentFeeShare / GROWTH_FACTOR;
-      if (adjustedFeeShare < MIN_FEE_SHARE) adjustedFeeShare = MIN_FEE_SHARE;
+      if (adjustedFeeShare < minFeeShare) adjustedFeeShare = minFeeShare;
     }
   }
 }

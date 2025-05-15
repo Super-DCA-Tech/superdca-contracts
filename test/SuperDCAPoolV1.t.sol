@@ -488,19 +488,17 @@ contract SuperDCAPoolV1Test is Test {
       currentFee = increasedFee;
     }
 
-    // Verify max and min bounds still work
+    // Verify max cap still in place
     uint256 maxFee = pool.MAX_FEE_SHARE();
-    uint256 minFee = pool.MIN_FEE_SHARE();
-
-    // Test max cap
     skip(24 hours);
     uint256 cappedFee = pool.getExecutionFeeShare(maxFee);
     assertEq(cappedFee, maxFee, "Fee should be capped at max");
 
-    // Test min floor
+    // Verify new dynamic minimum is respected
+    uint256 dynamicMin = pool.baseFeeShare() / 32; // 5 halvings default
     pool.distribute(new bytes(0), true);
-    uint256 flooredFee = pool.getExecutionFeeShare(minFee);
-    assertEq(flooredFee, minFee, "Fee should not go below min");
+    uint256 flooredFee = pool.getExecutionFeeShare(dynamicMin);
+    assertEq(flooredFee, dynamicMin, "Fee should not go below dynamic minimum");
   }
 
   function testFork_CannotInitializeTwice() public {
@@ -1018,5 +1016,61 @@ contract SuperDCAPoolV1Test is Test {
     // Alice (current executor) should have received the same amount in ETH
     uint256 received = aliceEthAfter - aliceEthBefore;
     assertApproxEqAbs(received, expectedFee, 1, "Executor did not receive correct ETH amount");
+  }
+
+  function testFork_FeeHalvingLimitEnforced() public {
+    // Start flow so pool has funds to distribute
+    _createFlow(bob, USDCX, address(pool), uint96(INFLOW_RATE_USDC * 5));
+
+    uint256 initialFee = pool.gelatoFeeShare();
+    // expected minimal fee after 5 halvings
+    uint256 expectedMin = initialFee / 32; // 2 ** 5
+
+    // Run 10 on-time distributions (<= distributionInterval)
+    for (uint256 i = 0; i < 10; i++) {
+      skip(1 hours);
+      pool.distribute(new bytes(0), true);
+    }
+
+    uint256 finalFee = pool.gelatoFeeShare();
+    assertEq(finalFee, expectedMin, "Fee should not fall below the limit derived from maxFeeHalvings");
+  }
+
+  function testFork_UpdateMaxFeeHalvings() public {
+    uint256 newMax = 2; // allow only 2 halvings (25% of baseline)
+
+    // Watch the event
+    vm.expectEmit(true, true, true, true);
+    emit SuperDCAPoolV1.UpdateMaxFeeHalvings(newMax);
+    pool.setMaxFeeHalvings(newMax);
+
+    assertEq(pool.maxFeeHalvings(), newMax);
+
+    // Verify new lower bound respected
+    _createFlow(alice, USDCX, address(pool), uint96(INFLOW_RATE_USDC * 5));
+    uint256 expectedMin = pool.baseFeeShare() / 4; // 2 ** 2
+
+    for (uint256 i = 0; i < 5; i++) {
+      skip(1 hours);
+      pool.distribute(new bytes(0), true);
+    }
+
+    assertEq(pool.gelatoFeeShare(), expectedMin);
+  }
+
+  function testFork_SetGelatoFeeShareUpdatesBaseline() public {
+    uint256 newFee = 5e15; // 0.5 %
+    vm.expectEmit(true, true, true, true);
+    emit SuperDCAPoolV1.UpdateGelatoFeeShare(newFee);
+    pool.setGelatoFeeShare(newFee);
+
+    assertEq(pool.gelatoFeeShare(), newFee);
+    assertEq(pool.baseFeeShare(), newFee);
+
+    // After halving once, fee should be newFee / 2 (since baseline reset)
+    _createFlow(alice, USDCX, address(pool), uint96(INFLOW_RATE_USDC * 5));
+    skip(1 hours);
+    pool.distribute(new bytes(0), true);
+    assertEq(pool.gelatoFeeShare(), newFee / 2);
   }
 }

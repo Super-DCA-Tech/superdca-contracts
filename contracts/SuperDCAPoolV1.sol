@@ -153,6 +153,10 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
   bytes internal encodedSwapPath;
   bytes internal encodedGasPath;
 
+  // New state variables
+  uint256 public baseFeeShare;
+  uint256 public maxFeeHalvings;
+
   // --- Events ---
   event Swap(
     uint256 inputAmount, uint256 outputAmount, uint256 oraclePrice, uint256 fee, address feePayer
@@ -160,6 +164,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
   event UpdateGelatoFeeShare(uint256 newGelatoFee);
   event RefundedUninvestedAmount(address shareholder, uint256 uninvestAmount);
   event ErrorRefundingUninvestedAmount(address shareholder, uint256 uninvestAmount);
+  event UpdateMaxFeeHalvings(uint256 newMaxFeeHalvings);
 
   // --- Errors ---
   error AlreadyInitialized();
@@ -175,6 +180,10 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
   {
     // Deploy Trade for trade tracking
     dcaTrade = new SuperDCATrade();
+
+    // Initialize fee related parameters
+    baseFeeShare = gelatoFeeShare; // establish baseline
+    maxFeeHalvings = 5; // default maximum halvings (~1% / 32 ≈ 0.03%)
   }
 
   // --- Initialization Functions ---
@@ -717,7 +726,17 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
   }
 
   function getExecutionFeeShare(uint256 currentFeeShare) public view returns (uint256) {
-    return FeeRetargetLib.adjustFeeShare(currentFeeShare, lastDistributedAt, distributionInterval);
+    uint256 minFeeShareDynamic = baseFeeShare / (2 ** maxFeeHalvings);
+    if (minFeeShareDynamic < MIN_FEE_SHARE) {
+      minFeeShareDynamic = MIN_FEE_SHARE;
+    }
+    return FeeRetargetLib.adjustFeeShare(
+      currentFeeShare,
+      lastDistributedAt,
+      distributionInterval,
+      minFeeShareDynamic,
+      MAX_FEE_SHARE
+    );
   }
 
   // --- Getter / View Functions ---
@@ -816,4 +835,16 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
 
   // --- Fallback Function ---
   receive() external payable override {}
+
+  // --- Admin Functions ---
+  function setGelatoFeeShare(uint256 newGelatoFee) public {
+    gelatoFeeShare = newGelatoFee;
+    baseFeeShare = newGelatoFee; // reset baseline when manually set
+    emit UpdateGelatoFeeShare(newGelatoFee);
+  }
+
+  function setMaxFeeHalvings(uint256 newMaxFeeHalvings) public {
+    maxFeeHalvings = newMaxFeeHalvings;
+    emit UpdateMaxFeeHalvings(newMaxFeeHalvings);
+  }
 }
