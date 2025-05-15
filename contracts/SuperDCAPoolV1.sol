@@ -108,7 +108,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
     // outputToken pool
 
   // Uniswap V4 Constants
-  address constant GAUGE_HOOK_ADDRESS = 0x50c10069758F6E8dFFef8107a7E0898328613a80;
+  address constant GAUGE_HOOK_ADDRESS = 0x9d2a3D6b9C9339Cf7a680DDEd69204a4EdC3BA80;
   address constant USDC_ADDRESS = 0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85;
   address constant DCA_ADDRESS = 0xb1599CDE32181f48f89683d3C5Db5C5D2C7C93cc;
   address constant ETH_ADDRESS = address(0);
@@ -117,7 +117,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
     currency0: Currency.wrap(USDC_ADDRESS),
     currency1: Currency.wrap(DCA_ADDRESS),
     fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
-    tickSpacing: 60,
+    tickSpacing: 2,
     hooks: IHooks(GAUGE_HOOK_ADDRESS)
   });
 
@@ -125,7 +125,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
     currency0: Currency.wrap(ETH_ADDRESS),
     currency1: Currency.wrap(DCA_ADDRESS),
     fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
-    tickSpacing: 60,
+    tickSpacing: 2,
     hooks: IHooks(GAUGE_HOOK_ADDRESS)
   });
 
@@ -823,7 +823,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
     host.callAgreement(
       cfa,
       abi.encodeWithSelector(
-        cfa.deleteFlow.selector,
+        cfa.deleteFlow.selector, 
         token,
         streamer,
         address(this),

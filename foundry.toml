@@ -5,7 +5,7 @@
   libs = ["lib"]
   src = "contracts"
   optimizer = true
-  optimizer_runs = 1_000
+  optimizer_runs = 800
   out = "artifacts"
   remappings = [
   '@superfluid-finance/ethereum-contracts/=lib/protocol-monorepo/packages/ethereum-contracts/',
