@@ -7,13 +7,13 @@ import {
   ISuperToken,
   ISuperAgreement,
   SuperAppDefinitions
-} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
+} from "@superfluid-finance/ethereum-contracts/interfaces/superfluid/ISuperfluid.sol";
 import {IConstantFlowAgreementV1} from
-  "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IConstantFlowAgreementV1.sol";
+  "@superfluid-finance/ethereum-contracts/interfaces/agreements/IConstantFlowAgreementV1.sol";
 import {IInstantDistributionAgreementV1} from
-  "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IInstantDistributionAgreementV1.sol";
-import {SuperAppBase} from "@superfluid-finance/ethereum-contracts/contracts/apps/SuperAppBase.sol";
-import {ISETH} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/tokens/ISETH.sol";
+  "@superfluid-finance/ethereum-contracts/interfaces/agreements/IInstantDistributionAgreementV1.sol";
+import {SuperAppBase} from "@superfluid-finance/ethereum-contracts/apps/SuperAppBase.sol";
+import {ISETH} from "@superfluid-finance/ethereum-contracts/interfaces/tokens/ISETH.sol";
 
 // OpenZeppelin imports
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
