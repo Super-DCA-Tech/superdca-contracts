@@ -12,7 +12,7 @@ import {IERC20} from "forge-std/interfaces/IERC20.sol";
 contract DistributeNoGas is Script {
     // !!! IMPORTANT !!!
     // Replace this with the actual address of your deployed SuperDCAPoolV1 contract
-    address public constant POOL_ADDRESS = 0x21497f1985d3682fF9098f86bD9137a683bC6118;
+    address public constant POOL_ADDRESS = 0x07d9d75Ebe3f7C14a166c80717F394547ce9461D;
 
     SuperDCAPoolV1 public pool;
     uint256 public deployerPrivateKey;

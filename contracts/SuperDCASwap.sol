@@ -37,12 +37,12 @@ contract SuperDCASwap {
     PERMIT2.approve(token, address(ROUTER), amount, expiration);
   }
 
-  function swapExactInputSingle(
+  function _swapExactInputSingle(
     PoolKey calldata key,
     bool zeroForOne,
     uint128 amountIn,
     uint128 minAmountOut
-  ) external payable returns (uint256 amountOut) {
+  ) internal returns (uint256 amountOut) {
     // Encode the Universal Router command
     bytes memory commands = abi.encodePacked(uint8(Commands.V4_SWAP));
     bytes[] memory inputs = new bytes[](1);
@@ -94,12 +94,12 @@ contract SuperDCASwap {
     return amountOut;
   }
 
-  function swapExactOutputSingle(
+  function _swapExactOutputSingle(
     PoolKey calldata key,
     bool zeroForOne,
     uint128 amountOut,
     uint128 maxAmountIn
-  ) external payable returns (uint256 amountIn) {
+  ) internal returns (uint256 amountIn) {
     // Encode the Universal Router command
     bytes memory commands = abi.encodePacked(uint8(Commands.V4_SWAP));
     bytes[] memory inputs = new bytes[](1);
