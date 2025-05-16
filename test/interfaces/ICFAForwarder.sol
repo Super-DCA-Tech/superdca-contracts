@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.23;
 
-import {ISuperToken} from "@superfluid-finance/ethereum-contracts/interfaces/superfluid/ISuperfluid.sol";
+import {ISuperToken} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 
 interface ICFAForwarder {
     function createFlow(

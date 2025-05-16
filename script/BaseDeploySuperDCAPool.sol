@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import "forge-std/Script.sol";
 import "../contracts/SuperDCAPoolV1.sol";
 import "../contracts/SuperDCATrade.sol";
-import {ISuperfluid, IConstantFlowAgreementV1, ISuperToken} from "@superfluid-finance/ethereum-contracts/interfaces/superfluid/ISuperfluid.sol";
+import {ISuperfluid, IConstantFlowAgreementV1, ISuperToken} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 
 abstract contract BaseDeploySuperDCAPool is Script {
     struct NetworkConfiguration {
