@@ -1,0 +1,59 @@
+{
+  "transactions": [
+    {
+      "hash": null,
+      "transactionType": "CALL",
+      "contractName": null,
+      "contractAddress": "0xc07e21c78d6ad0917cfcbde8931325c392958892",
+      "function": null,
+      "arguments": null,
+      "transaction": {
+        "from": "0xc07e21c78d6ad0917cfcbde8931325c392958892",
+        "to": "0xc07e21c78d6ad0917cfcbde8931325c392958892",
+        "gas": "0x7199",
+        "value": "0x0",
+        "input": "0x",
+        "nonce": "0x31b",
+        "chainId": "0xa"
+      },
+      "additionalContracts": [],
+      "isFixedGasLimit": false
+    },
+    {
+      "hash": null,
+      "transactionType": "CALL",
+      "contractName": null,
+      "contractAddress": "0xc07e21c78d6ad0917cfcbde8931325c392958892",
+      "function": null,
+      "arguments": null,
+      "transaction": {
+        "from": "0xc07e21c78d6ad0917cfcbde8931325c392958892",
+        "to": "0xc07e21c78d6ad0917cfcbde8931325c392958892",
+        "gas": "0xf87c",
+        "value": "0x0",
+        "input": "0x",
+        "nonce": "0x31d",
+        "chainId": "0xa",
+        "authorizationList": [
+          {
+            "chainId": "0xa",
+            "address": "0x0000000000000000000000000000000000000000",
+            "nonce": "0x31c",
+            "yParity": "0x1",
+            "r": "0x6c38c668431d1cbde320ce01e4911d300b782960f038a1ccef22d06ded521280",
+            "s": "0x60c673f3ea14a913c4f47a3502cd742d6c9980e23f91f35054f1378afebf1181"
+          }
+        ]
+      },
+      "additionalContracts": [],
+      "isFixedGasLimit": false
+    }
+  ],
+  "receipts": [],
+  "libraries": [],
+  "pending": [],
+  "returns": {},
+  "timestamp": 1747506026,
+  "chain": 10,
+  "commit": "bf1af0f"
+}

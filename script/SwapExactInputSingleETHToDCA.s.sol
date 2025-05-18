@@ -59,8 +59,7 @@ contract SwapExactInputSingleETHToDCA is Script {
 
         // Set swap parameters
         bool zeroForOne = true; // true for ETH->DCA, false for DCA->ETH
-        uint128 amountIn = 0.001e18; // 0.001 ETH
-        uint128 minAmountOut = 49e17; // Set your minimum output amount
+        uint128 amountIn = 0.01e18; // 0.001 ETH
 
         // Encode the Universal Router command
         bytes memory commands = abi.encodePacked(uint8(Commands.V4_SWAP));

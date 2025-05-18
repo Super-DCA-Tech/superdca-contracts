@@ -19,6 +19,7 @@ import {ISETH} from "@superfluid-finance/ethereum-contracts/contracts/interfaces
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 // Uniswap imports
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
@@ -55,7 +56,7 @@ import "forge-std/console.sol";
 /// @dev This contract is a mixin of SuperDCAPoolStaking and SuperDCASwap
 /// @dev This contract only supports ERC20 tokens (e.g. USDC, USDT, etc.) to WETH swaps, output must
 /// be WETH
-contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStaking, SuperDCASwap {
+contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStaking, SuperDCASwap, Ownable {
   using SafeERC20 for ERC20;
 
   // --- Structs ---
@@ -837,13 +838,13 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
   receive() external payable override {}
 
   // --- Admin Functions ---
-  function setGelatoFeeShare(uint256 newGelatoFee) public {
+  function setGelatoFeeShare(uint256 newGelatoFee) public onlyOwner {
     gelatoFeeShare = newGelatoFee;
     baseFeeShare = newGelatoFee; // reset baseline when manually set
     emit UpdateGelatoFeeShare(newGelatoFee);
   }
 
-  function setMaxFeeHalvings(uint256 newMaxFeeHalvings) public {
+  function setMaxFeeHalvings(uint256 newMaxFeeHalvings) public onlyOwner {
     maxFeeHalvings = newMaxFeeHalvings;
     emit UpdateMaxFeeHalvings(newMaxFeeHalvings);
   }
