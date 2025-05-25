@@ -52,7 +52,8 @@ contract SuperDCAPoolV1Test is Test {
 
   // Details need to deploy as an approved deployer for SF
   address public constant AUTHORIZED_DEPLOYER = 0x744f96332713EFC378e334A7eccAEc8E19532100;
-  uint256 public constant FORK_BLOCK_NUMBER = 135_866_079; // May 15, 2025
+  // uint256 public constant FORK_BLOCK_NUMBER = 135_866_079; // May 15, 2025
+  uint256 public constant FORK_BLOCK_NUMBER = 136_282_144; // May 25, 2025
 
   // Simulation constants
   uint256 public constant UPGRADE_AMOUNT = 1e18;
@@ -996,7 +997,7 @@ contract SuperDCAPoolV1Test is Test {
     for (uint256 i = 0; i < entries.length; i++) {
       if (entries[i].topics[0] == swapSig) {
         // The event only has non-indexed parameters in data, so we can decode directly
-        (uint256 _inputAmt, uint256 _outputAmt, uint256 _oraclePrice, uint256 _feeAmt, address feePayer) = abi
+        (, uint256 _outputAmt, , uint256 _feeAmt,) = abi
           .decode(entries[i].data, (uint256, uint256, uint256, uint256, address));
         outputAmount = _outputAmt;
         feePaid = _feeAmt;
@@ -1040,9 +1041,11 @@ contract SuperDCAPoolV1Test is Test {
     uint256 newMax = 2; // allow only 2 halvings (25% of baseline)
 
     // Watch the event
+    vm.startPrank(AUTHORIZED_DEPLOYER);
     vm.expectEmit(true, true, true, true);
     emit SuperDCAPoolV1.UpdateMaxFeeHalvings(newMax);
     pool.setMaxFeeHalvings(newMax);
+    vm.stopPrank();
 
     assertEq(pool.maxFeeHalvings(), newMax);
 
@@ -1060,9 +1063,12 @@ contract SuperDCAPoolV1Test is Test {
 
   function testFork_SetGelatoFeeShareUpdatesBaseline() public {
     uint256 newFee = 5e15; // 0.5 %
+
+    vm.startPrank(AUTHORIZED_DEPLOYER);
     vm.expectEmit(true, true, true, true);
     emit SuperDCAPoolV1.UpdateGelatoFeeShare(newFee);
     pool.setGelatoFeeShare(newFee);
+    vm.stopPrank();
 
     assertEq(pool.gelatoFeeShare(), newFee);
     assertEq(pool.baseFeeShare(), newFee);
