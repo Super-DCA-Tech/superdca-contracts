@@ -694,15 +694,6 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
     (_timestamp, _flowRate,,) = cfa.getFlow(_superToken, _shareholder, address(this));
   }
 
-  function _getShareAllocations(ShareholderUpdate memory _shareholderUpdate)
-    internal
-    pure
-    returns (uint128 userShares)
-  {
-    // The user's shares will always be their current flow rate
-    userShares = ShareMathLib.flowRateToShares(_shareholderUpdate.currentFlowRate);
-  }
-
   function _calcUserUninvested(uint256 prevUpdateTimestamp, uint256 flowRate, uint256 lastDist)
     internal
     view
