@@ -105,8 +105,8 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
     // outputToken pool
 
   // Uniswap V4 Constants
-  address constant GAUGE_HOOK_ADDRESS = 0xBc5F29A583a8d3ec76e03372659e01a22feE3A80;
-  address constant USDC_ADDRESS = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+  address constant GAUGE_HOOK_ADDRESS = 0xb4f4Ad63BCc0102B10e6227236e569Dce0d97A80;
+  address constant USDC_ADDRESS = 0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85;
   address constant DCA_ADDRESS = 0xb1599CDE32181f48f89683d3C5Db5C5D2C7C93cc;
   address constant ETH_ADDRESS = address(0);
 
