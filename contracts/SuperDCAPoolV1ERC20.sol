@@ -67,11 +67,9 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
     IConstantFlowAgreementV1 cfa;
     IInstantDistributionAgreementV1 ida;
     IWETH weth;
-    ISuperToken wethx;
     ISuperToken inputToken;
     ISuperToken outputToken;
     AggregatorV3Interface priceFeed;
-    bool invertPrice;
     string registrationKey;
     address payable automate;
   }
@@ -94,21 +92,25 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
   SuperDCATrade public dcaTrade;
   uint256 public lastDistributedAt; // The timestamp of the last distribution
   ISuperToken public inputToken; // e.g. USDCx
-  ISuperToken public outputToken; // e.g. ETHx
+  ISuperToken public outputToken; // e.g. WBTCx
   address public underlyingInputToken; // e.g. USDC
-  address public underlyingOutputToken; // e.g. WETH
+  address public underlyingOutputToken; // e.g. WBTC
   IWETH public weth;
-  ISuperToken public wethx;
   uint32 public constant OUTPUT_INDEX = 0; // Superfluid IDA Index for outputToken's output pool
+  uint256 public constant INTERVAL = 60_000; // The interval for gelato to check for execution
   uint256 public constant EXEC_FEE_SCALER = 1e18; // The scaler for the execution fee (1e18 = 100%)
+  // TODO: make's minoutput 0 for simulation
+  uint256 public constant RATE_TOLERANCE = 1e4; // The percentage to deviate from the oracle (basis
+    // points)
   uint128 public constant SHARE_SCALER = 100_000; // The scaler to apply to the share of the
     // outputToken pool
 
   // Uniswap V4 Constants
-  address constant GAUGE_HOOK_ADDRESS = 0xBc5F29A583a8d3ec76e03372659e01a22feE3A80;
-  address constant USDC_ADDRESS = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+  address constant GAUGE_HOOK_ADDRESS = 0xb4f4Ad63BCc0102B10e6227236e569Dce0d97A80;
+  address constant USDC_ADDRESS = 0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85;
   address constant DCA_ADDRESS = 0xb1599CDE32181f48f89683d3C5Db5C5D2C7C93cc;
   address constant ETH_ADDRESS = address(0);
+  address constant WBTC_ADDRESS = 0x4ac8bD1bDaE47beeF2D1c6Aa62229509b962Aa0d;
 
   PoolKey DCA_USDC_KEY = PoolKey({
     currency0: Currency.wrap(USDC_ADDRESS),
@@ -126,10 +128,16 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
     hooks: IHooks(GAUGE_HOOK_ADDRESS)
   });
 
+  PoolKey DCA_WBTC_KEY = PoolKey({
+    currency0: Currency.wrap(WBTC_ADDRESS),
+    currency1: Currency.wrap(DCA_ADDRESS),
+    fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
+    tickSpacing: 60,
+    hooks: IHooks(GAUGE_HOOK_ADDRESS)
+  });
+
   // Chainlink Variables
   AggregatorV3Interface public priceFeed; // Chainlink price feed for the inputToken/outputToken
-    // pair
-  bool internal invertPrice; // Whether to invert the price in rate conversions
 
   // Gelato task variables
   bytes32 public taskId;
@@ -176,7 +184,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
 
     // Initialize fee related parameters
     baseFeeShare = gelatoFeeShare; // establish baseline
-    maxFeeHalvings = 5; // default maximum halvings (~1% / 32 ≈ 0.03%)
+    maxFeeHalvings = 10; // default maximum halvings (~1% / 2^10 = 0.0009765625%)
   }
 
   // --- Initialization Functions ---
@@ -197,9 +205,9 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
     }
 
     _createGelatoTask();
-    _initializeWETH(params.weth, params.wethx);
+    weth = params.weth;
     _initializePool(params.inputToken, params.outputToken);
-    _initializePriceFeed(params.priceFeed, params.invertPrice);
+    priceFeed = params.priceFeed;
   }
 
   function _createGelatoTask() internal {
@@ -210,13 +218,8 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
     moduleData.modules[1] = Module.TRIGGER;
     moduleData.args[0] = _proxyModuleArg();
     // solhint-disable-next-line not-rely-on-time
-    moduleData.args[1] = _timeTriggerModuleArg(uint128(block.timestamp), uint128(60_000));
+    moduleData.args[1] = _timeTriggerModuleArg(uint128(block.timestamp), uint128(INTERVAL));
     taskId = _createTask(address(this), execData, moduleData, ETH);
-  }
-
-  function _initializeWETH(IWETH _weth, ISuperToken _wethx) internal {
-    weth = _weth;
-    wethx = _wethx;
   }
 
   function _initializePool(ISuperToken _inputToken, ISuperToken _outputToken) internal {
@@ -231,15 +234,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
     _createIndex(OUTPUT_INDEX, outputToken);
 
     // Approve upgrading underlying outputTokens if its not a supertoken
-    // Supertokens have their own address as the underlying token
-    if (underlyingOutputToken != address(outputToken)) {
-      ERC20(underlyingOutputToken).safeIncreaseAllowance(address(outputToken), 2 ** 256 - 1);
-    }
-  }
-
-  function _initializePriceFeed(AggregatorV3Interface _priceFeed, bool _invertPrice) internal {
-    priceFeed = _priceFeed;
-    invertPrice = _invertPrice;
+    ERC20(underlyingOutputToken).safeIncreaseAllowance(address(outputToken), type(uint256).max);
   }
 
   // --- Core Distribution Logic ---
@@ -256,7 +251,8 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
 
     // Downgrade tokens and get underlying balance
     uint256 underlyingBalance = _downgradeInputTokens(inputTokenAmount);
-    // Update the fee share for the this distribution
+
+    // Update the fee share for this distribution
     gelatoFeeShare = getExecutionFeeShare(gelatoFeeShare);
     emit UpdateGelatoFeeShare(gelatoFeeShare);
 
@@ -270,33 +266,27 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
     // Execute the swap
     uint256 outputTokenAmount = _swap(underlyingBalance);
 
-    // Calc the portion of the output that will go toward the fee
-    // The amount of output tokens (in ETH terms) that represent the executor/Gelato fee share.
-    // e.g. If gelatoFeeShare = 1e16 (1%) and we received 100 ETH worth of output, the executor
-    // is entitled to 1 ETH. We purposefully *do not* use the complement so that we never exceed
-    // the configured percentage.
+    // Calculate the portion of the output that will go toward the fee (in ETH terms)
+    // e.g. If gelatoFeeShare = 1e16 (1%) and we received 100 ETH worth of output,
+    // the executor is entitled to 1 ETH.
     uint256 maxFeeEthAmount = (outputTokenAmount * gelatoFeeShare) / EXEC_FEE_SCALER;
 
-    // TODO: Move the a helper function
-    // Support skipping this step in case it ever blocks the distribution
+    // Support skipping gas reimbursement in edge cases
     uint256 fee = 0;
     address feeToken = address(0);
     if (!ignoreGasReimbursement) {
       // Get the fee details from Gelato Ops
       (fee, feeToken) = _getFeeDetails();
 
-      // If the fee is greater than 0 and less than the max fee amount, reimburse the fee to the
-      // Gelato Ops
+      // If the fee is greater than 0 and less than the max fee amount, reimburse Gelato
       if (fee > 0 && fee < maxFeeEthAmount) {
-        // Reverts if the fee is less than what's needed to cover the fee
         _transfer(fee, feeToken);
       }
     } else if (currentExecutor != address(0)) {
-      // Send whatever fee share of inputTokens have accumulated to the staked executor
+      // Send whatever fee share of outputTokens have accumulated to the staked executor
       payable(currentExecutor).transfer(maxFeeEthAmount);
     }
 
-    // TODO: Audit to make sure this captures everything we need to measure efficiency easily.
     // Emit swap event for performance tracking purposes
     emit Swap(
       inputTokenAmount,
@@ -306,19 +296,19 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
       fee > 0 ? address(0) : currentExecutor
     );
 
-    // Handle token upgrading
+    // Handle token upgrading (e.g. WBTC -> WBTCx)
     _handleTokenUpgrade();
 
-    // Deposit all ETH we have in the contract to the weth contract
+    // Deposit all ETH currently held by the contract into WETH so it is tracked
     weth.deposit{value: address(this).balance}();
 
-    // Set outputTokenAmount to the balanceOf to account for any spare change from last round
+    // Update outputTokenAmount to include any remaining balance from previous rounds
     outputTokenAmount = outputToken.balanceOf(address(this));
 
     // If there is no outputToken to distribute, then return
     if (outputTokenAmount == 0) return newCtx;
 
-    // Distribute outputToken
+    // Distribute outputToken via IDA
     (outputTokenAmount,) =
       ida.calculateDistribution(outputToken, address(this), OUTPUT_INDEX, outputTokenAmount);
 
@@ -342,15 +332,6 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
     uint128 amountIn = uint128(amount);
     uint128 minAmountOut = 0; // Same as original implementation
 
-    // Determine the actual addresses to use for input and output tokens
-    // For native ETH, we use the weth address for path definition but address(0) for Currency
-    address inputAddr = address(underlyingInputToken);
-    address outputAddr = address(underlyingOutputToken);
-
-    // Check if we're dealing with native ETH (represented as address(0) in Currency)
-    bool inputIsETH = inputAddr == address(weth);
-    bool outputIsETH = outputAddr == address(weth);
-
     // Create path based on tokens
     PathKey[] memory path = new PathKey[](2);
 
@@ -365,43 +346,29 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
 
     // Step 2: DCA -> outputToken
     path[1] = PathKey({
-      intermediateCurrency: Currency.wrap(outputIsETH ? ETH_ADDRESS : outputAddr),
-      fee: DCA_ETH_KEY.fee,
-      tickSpacing: DCA_ETH_KEY.tickSpacing,
-      hooks: DCA_ETH_KEY.hooks,
+      intermediateCurrency: Currency.wrap(WBTC_ADDRESS),
+      fee: DCA_WBTC_KEY.fee,
+      tickSpacing: DCA_WBTC_KEY.tickSpacing,
+      hooks: DCA_WBTC_KEY.hooks,
       hookData: bytes("")
     });
 
-    // Define input currency (use ETH currency for native ETH)
-    Currency currencyIn = Currency.wrap(inputIsETH ? ETH_ADDRESS : inputAddr);
+    // Define input currency
+    Currency currencyIn = Currency.wrap(underlyingInputToken);
 
-    // Approve tokens for Permit2 if needed (skip for ETH)
-    if (!inputIsETH) {
-      // Use the approveTokenWithPermit2 function from SuperDCASwap
-      _approveTokenWithPermit2(inputAddr, uint128(amountIn), uint48(block.timestamp + 300));
-    }
+    // Approve tokens for Permit2
+    _approveTokenWithPermit2(underlyingInputToken, uint128(amountIn), uint48(block.timestamp + 300));
 
     // Execute the swap using the inherited swapExactInput function
     return _swapExactInput(currencyIn, path, amountIn, minAmountOut);
   }
 
   function _handleTokenUpgrade() internal {
-    if (underlyingOutputToken != address(outputToken)) {
-      if (outputToken == wethx) {
-        weth.withdraw(ERC20(underlyingOutputToken).balanceOf(address(this)));
-        ISETH(address(outputToken)).upgradeByETH{value: address(this).balance}();
-      } else {
-        outputToken.upgrade(
-          ERC20(underlyingOutputToken).balanceOf(address(this))
-            * (10 ** (18 - ERC20(underlyingOutputToken).decimals()))
-        );
-      }
-    } // else this is a native supertoken
-  }
-
-  function _calculateAmountAfterFees(uint256 amount) internal view returns (uint256) {
-    amount = ERC20(underlyingInputToken).balanceOf(address(this));
-    return (amount * (EXEC_FEE_SCALER - gelatoFeeShare)) / EXEC_FEE_SCALER;
+    // This will only ever be WBTC -> WBTCx, but will work for any ERC20
+    outputToken.upgrade(
+      ERC20(underlyingOutputToken).balanceOf(address(this))
+        * (10 ** (18 - ERC20(underlyingOutputToken).decimals()))
+    );
   }
 
   function getLatestPrice() public view returns (uint256) {
@@ -686,7 +653,6 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
 
     uint128 userShares = ShareMathLib.flowRateToShares(_shareholderUpdate.currentFlowRate);
 
-    // TODO: Update the fee taken by the DAO, Affiliate
     _newCtx = _updateSubscriptionWithContext(
       _newCtx, OUTPUT_INDEX, _shareholderUpdate.shareholder, userShares, outputToken
     );
@@ -749,9 +715,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
   }
 
   function _getUnderlyingToken(ISuperToken _token) internal view returns (address) {
-    // If the token is wethx, then the underlying token is weth
-    if (address(_token) == address(wethx)) return address(weth);
-
+    // Will NOT work with ETHx
     address underlyingToken = _token.getUnderlyingToken();
 
     // If the underlying token is 0x0, then the token is a supertoken

@@ -25,8 +25,6 @@ abstract contract BaseDeploySuperDCAPool is Script {
     address dcaToken;
     address usdcx;
     address usdc;
-    address daix;
-    address dai;
     address wethx;
     address weth;
     // Uniswap V4
