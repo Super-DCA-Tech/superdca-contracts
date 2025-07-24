@@ -78,13 +78,13 @@ contract SuperDCASwap {
     inputs[0] = abi.encode(actions, params);
 
     // Execute the swap
-    uint256 deadline = block.timestamp + 20;
+    // uint256 deadline = block.timestamp + 20;
     if (requireETHValue) {
       require(msg.value == amountIn, "Incorrect ETH amount");
-      ROUTER.execute{value: amountIn}(commands, inputs, deadline);
+      ROUTER.execute{value: amountIn}(commands, inputs, block.timestamp);
     } else {
       require(msg.value == 0, "ETH not needed for this swap");
-      ROUTER.execute(commands, inputs, deadline);
+      ROUTER.execute(commands, inputs, block.timestamp);
     }
 
     // Verify and return the output amount
@@ -272,6 +272,122 @@ contract SuperDCASwap {
     // Return the actual amount of output tokens received
     return amountOut;
   }
+
+  function _swapExactOutput(
+    Currency currencyOut,
+    PathKey[] memory path,
+    uint128 amountOut,
+    uint128 maxAmountIn
+  ) internal returns (uint256 amountIn) {
+    require(path.length > 0, "Path cannot be empty");
+
+    // Encode the Universal Router command for a V4 swap
+    bytes memory commands = abi.encodePacked(uint8(Commands.V4_SWAP));
+    bytes[] memory inputs = new bytes[](1);
+
+    // Encode the sequence of V4Router actions required for a multi-hop exact output swap
+    bytes memory actions = abi.encodePacked(
+      uint8(Actions.SWAP_EXACT_OUT), // Perform the multi-hop swap defined by the path
+      uint8(Actions.SETTLE_ALL), // Settle the debt of the input token created by the swap action
+      uint8(Actions.TAKE_ALL) // Take the credit of the final output token created by the swap action
+    );
+
+    // Determine the input currency by simulating the path backwards (like V4Router does)
+    // After this loop, simulatedCurrencyOut will actually be the input currency
+    Currency simulatedCurrencyOut = currencyOut;
+    for (uint256 i = path.length; i > 0; i--) {
+      simulatedCurrencyOut = path[i - 1].intermediateCurrency;
+    }
+    Currency inputCurrency = simulatedCurrencyOut;
+
+    address inputTokenAddress = Currency.unwrap(inputCurrency);
+    address outputTokenAddress = Currency.unwrap(currencyOut);
+
+    // Check if the input token is native ETH to handle msg.value
+    bool requireETHValue = inputTokenAddress == address(0);
+
+    // Prepare the parameters for each action in the sequence
+    bytes[] memory params = new bytes[](3);
+
+    // Params[0]: Parameters for the SWAP_EXACT_OUT action
+    params[0] = abi.encode(
+      IV4Router.ExactOutputParams({
+        currencyOut: currencyOut,
+        path: path,
+        amountOut: amountOut,
+        amountInMaximum: maxAmountIn
+      })
+    );
+
+    // Params[1]: Parameters for the SETTLE_ALL action (settle the input currency)
+    params[1] = abi.encode(inputCurrency, maxAmountIn);
+
+    // Params[2]: Parameters for the TAKE_ALL action (take the final output currency)
+    params[2] = abi.encode(currencyOut, amountOut);
+
+    // Combine actions and their corresponding parameters into the input for the V4_SWAP command
+    inputs[0] = abi.encode(actions, params);
+
+    // Set a deadline for the transaction
+    uint256 deadline = block.timestamp + 20; // Using a short deadline (20 seconds)
+
+    // Record balance before execution for input calculation
+    uint256 balanceBefore = 0;
+    if (requireETHValue) {
+      balanceBefore = address(this).balance - msg.value; // Exclude the msg.value we're about to send
+    } else if (inputTokenAddress != address(0)) {
+      balanceBefore = IERC20(inputTokenAddress).balanceOf(address(this));
+    }
+
+    // Execute the swap via the Universal Router
+    if (requireETHValue) {
+      require(msg.value >= maxAmountIn, "Insufficient ETH amount");
+      // Pass ETH value if swapping native ETH
+      ROUTER.execute{value: maxAmountIn}(commands, inputs, deadline);
+
+      // Refund excess ETH if any
+      uint256 refund = msg.value - maxAmountIn;
+      if (refund > 0) {
+        (bool success,) = msg.sender.call{value: refund}("");
+        require(success, "ETH refund failed");
+      }
+    } else {
+      require(msg.value == 0, "ETH not required for this swap");
+      // Execute without ETH value if swapping ERC20 tokens
+      // Assumes necessary approvals (e.g., via Permit2) are already in place
+      ROUTER.execute(commands, inputs, deadline);
+    }
+
+    // Calculate the actual amount spent
+    if (requireETHValue) {
+      // For ETH, calculate how much was spent by checking the balance change
+      uint256 currentBalance = address(this).balance;
+      amountIn = balanceBefore + msg.value - currentBalance;
+    } else {
+      // For ERC20 tokens, check how much the token balance decreased
+      uint256 currentBalance = IERC20(inputTokenAddress).balanceOf(address(this));
+      amountIn = balanceBefore - currentBalance;
+    }
+
+    // Verify we didn't spend more than the maximum
+    require(amountIn <= maxAmountIn, "Spent more than maximum");
+
+    // For exact output swaps, we verify the output token is as expected
+    if (outputTokenAddress == address(0)) {
+      // If output is ETH, it should be in the contract's balance
+      require(address(this).balance >= amountOut, "Insufficient ETH output");
+    } else {
+      // If output is ERC20, verify the balance
+      require(
+        IERC20(outputTokenAddress).balanceOf(address(this)) >= amountOut,
+        "Insufficient token output"
+      );
+    }
+
+    // Return the actual amount of input tokens spent
+    return amountIn;
+  }
+
 
   receive() external payable virtual {}
 }
