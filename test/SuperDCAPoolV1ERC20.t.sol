@@ -9,7 +9,7 @@ import {SuperDCATrade} from "../contracts/SuperDCATrade.sol";
 import {SuperDCAPoolStaking} from "../contracts/pool/SuperDCAPoolStaking.sol";
 import {ICFAForwarder} from "./interfaces/ICFAForwarder.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/interfaces/AggregatorV3Interface.sol";
-import {IWETH} from "../contracts/interface/IWETH.sol";
+
 import {ISuperfluid} from
   "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {ISuperToken} from
@@ -36,7 +36,7 @@ contract SuperDCAPoolV1ERC20Test is Test {
   address public constant WBTC = 0x68f180fcCe6836688e9084f035309E29Bf0A2095;
   address public constant WETH = 0x4200000000000000000000000000000000000006;
   address public constant DCA = 0xb1599CDE32181f48f89683d3C5Db5C5D2C7C93cc;
-  address public constant BTC_USD_FEED = 0x13e3Ee699D1909E989722E753853AE30b17e08c5;
+  address public constant BTC_USD_FEED = 0xD702DD976Fb76Fffc2D3963D037dfDae5b04E593;
   address public constant GELATO_AUTOMATE = 0x2A6C106ae13B558BB9E2Ec64Bd2f1f7BEFF3A5E0;
   address public constant GELATO_NETWORK = 0x01051113D81D7d6DA508462F2ad6d7fD96cF42Ef;
 
@@ -95,7 +95,6 @@ contract SuperDCAPoolV1ERC20Test is Test {
       host: ISuperfluid(HOST_SUPERFLUID),
       cfa: IConstantFlowAgreementV1(CFA_SUPERFLUID),
       ida: IInstantDistributionAgreementV1(IDA_SUPERFLUID),
-      weth: IWETH(WETH), // Still needed for fee payments
       inputToken: ISuperToken(USDCX),
       outputToken: ISuperToken(WBTCX),
       priceFeed: AggregatorV3Interface(BTC_USD_FEED),
@@ -165,7 +164,6 @@ contract SuperDCAPoolV1ERC20Test is Test {
     // Verify initialization
     assertEq(address(pool.inputToken()), USDCX);
     assertEq(address(pool.outputToken()), WBTCX);
-    assertEq(address(pool.weth()), WETH);
     assertEq(pool.gelatoFeeShare(), 1e16); // 1% default fee
   }
 
@@ -307,9 +305,9 @@ contract SuperDCAPoolV1ERC20Test is Test {
 
     uint256 gasPrice = 1e9; // 1 Gwei
     uint256 gasLimit = 1e6; // 1M gas
-    uint256 tokenToWethRate = 1e18; // 1:1 for simplicity
+    uint256 tokenToEthRate = 1e18; // 1:1 for simplicity
 
-    uint256 nextDistTime = pool.getNextDistributionTime(gasPrice, gasLimit, tokenToWethRate);
+    uint256 nextDistTime = pool.getNextDistributionTime(gasPrice, gasLimit, tokenToEthRate);
 
     // Next distribution should be in the future
     // solhint-disable-next-line not-rely-on-time
@@ -319,7 +317,7 @@ contract SuperDCAPoolV1ERC20Test is Test {
     assertEq(
       nextDistTime,
       pool.lastDistributedAt()
-        + ((gasPrice * gasLimit * tokenToWethRate) / (INFLOW_RATE_USDC / 1e9)) / 1e9
+        + ((gasPrice * gasLimit * tokenToEthRate) / (INFLOW_RATE_USDC / 1e9)) / 1e9
     );
   }
 
@@ -503,7 +501,6 @@ contract SuperDCAPoolV1ERC20Test is Test {
       host: ISuperfluid(HOST_SUPERFLUID),
       cfa: IConstantFlowAgreementV1(CFA_SUPERFLUID),
       ida: IInstantDistributionAgreementV1(IDA_SUPERFLUID),
-      weth: IWETH(WETH),
       inputToken: ISuperToken(USDCX),
       outputToken: ISuperToken(WBTCX),
       priceFeed: AggregatorV3Interface(BTC_USD_FEED),
@@ -526,7 +523,6 @@ contract SuperDCAPoolV1ERC20Test is Test {
       host: ISuperfluid(HOST_SUPERFLUID),
       cfa: IConstantFlowAgreementV1(CFA_SUPERFLUID),
       ida: IInstantDistributionAgreementV1(IDA_SUPERFLUID),
-      weth: IWETH(WETH),
       inputToken: ISuperToken(USDCX),
       outputToken: ISuperToken(WBTCX),
       priceFeed: AggregatorV3Interface(BTC_USD_FEED),
@@ -621,13 +617,13 @@ contract SuperDCAPoolV1ERC20Test is Test {
 
     uint256 gasPrice = 1e9; // 1 Gwei
     uint256 gasLimit = 1e6; // 1M gas
-    uint256 tokenToWethRate = 1e18; // 1:1 for simplicity
+    uint256 tokenToEthRate = 1e18; // 1:1 for simplicity
 
-    uint256 nextDistTime = pool.getNextDistributionTime(gasPrice, gasLimit, tokenToWethRate);
+    uint256 nextDistTime = pool.getNextDistributionTime(gasPrice, gasLimit, tokenToEthRate);
 
     // Calculate expected time
     uint256 expectedTime = pool.lastDistributedAt()
-      + ((gasPrice * gasLimit * tokenToWethRate) / (INFLOW_RATE_USDC / 1e9)) / 1e9;
+      + ((gasPrice * gasLimit * tokenToEthRate) / (INFLOW_RATE_USDC / 1e9)) / 1e9;
 
     assertEq(nextDistTime, expectedTime);
   }
@@ -772,7 +768,6 @@ contract SuperDCAPoolV1ERC20Test is Test {
       host: ISuperfluid(HOST_SUPERFLUID),
       cfa: IConstantFlowAgreementV1(CFA_SUPERFLUID),
       ida: IInstantDistributionAgreementV1(IDA_SUPERFLUID),
-      weth: IWETH(WETH),
       inputToken: ISuperToken(USDCX),
       outputToken: ISuperToken(WBTCX),
       priceFeed: AggregatorV3Interface(address(0)), // Zero address price feed
