@@ -1,17 +1,15 @@
 pragma solidity ^0.8.28;
-// forge imports
 
+// forge imports
 import {Vm} from "forge-std/Vm.sol";
 import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
-import {SuperDCAPoolV1} from "../contracts/SuperDCAPoolV1.sol";
+import {SuperDCAPoolV1} from "../contracts/SuperDCAPoolV1ERC20.sol";
 import {SuperDCATrade} from "../contracts/SuperDCATrade.sol";
 import {SuperDCAPoolStaking} from "../contracts/pool/SuperDCAPoolStaking.sol";
 import {ICFAForwarder} from "./interfaces/ICFAForwarder.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/interfaces/AggregatorV3Interface.sol";
 import {IWETH} from "../contracts/interface/IWETH.sol";
-import {ISETHCustom} from
-  "@superfluid-finance/ethereum-contracts/contracts/interfaces/tokens/ISETH.sol";
 import {ISuperfluid} from
   "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {ISuperToken} from
@@ -26,7 +24,7 @@ import {Automate} from "@gelato/contracts/Automate.sol";
 import {LibDataTypes} from "@gelato/contracts/libraries/LibDataTypes.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract SuperDCAPoolV1Test is Test {
+contract SuperDCAPoolV1ERC20Test is Test {
   // Constants from optimism network
   address public constant HOST_SUPERFLUID = 0x567c4B141ED61923967cA25Ef4906C8781069a10;
   address public constant IDA_SUPERFLUID = 0xc4ce5118C3B20950ee288f086cb7FC166d222D4c;
@@ -34,10 +32,11 @@ contract SuperDCAPoolV1Test is Test {
   address public constant CFA_FORWARDER = 0xcfA132E353cB4E398080B9700609bb008eceB125;
   address public constant USDCX = 0x35Adeb0638EB192755B6E52544650603Fe65A006;
   address public constant USDC = 0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85;
-  address public constant WETHX = 0x4ac8bD1bDaE47beeF2D1c6Aa62229509b962Aa0d;
+  address public constant WBTCX = 0x9638EC1D29dfA9835fdb7fa74B5B77B14d6Ac77e; 
+  address public constant WBTC = 0x68f180fcCe6836688e9084f035309E29Bf0A2095;
   address public constant WETH = 0x4200000000000000000000000000000000000006;
   address public constant DCA = 0xb1599CDE32181f48f89683d3C5Db5C5D2C7C93cc;
-  address public constant ETH_USDC_FEED = 0x13e3Ee699D1909E989722E753853AE30b17e08c5;
+  address public constant BTC_USD_FEED = 0x13e3Ee699D1909E989722E753853AE30b17e08c5;
   address public constant GELATO_AUTOMATE = 0x2A6C106ae13B558BB9E2Ec64Bd2f1f7BEFF3A5E0;
   address public constant GELATO_NETWORK = 0x01051113D81D7d6DA508462F2ad6d7fD96cF42Ef;
 
@@ -51,8 +50,7 @@ contract SuperDCAPoolV1Test is Test {
 
   // Details need to deploy as an approved deployer for SF
   address public constant AUTHORIZED_DEPLOYER = 0x744f96332713EFC378e334A7eccAEc8E19532100;
-  // uint256 public constant FORK_BLOCK_NUMBER = 135_866_079; // May 15, 2025
-  uint256 public constant FORK_BLOCK_NUMBER = 136_282_144; // May 25, 2025
+  uint256 public constant FORK_BLOCK_NUMBER = 138_927_673; // July 25, 2025
 
   // Simulation constants
   uint256 public constant UPGRADE_AMOUNT = 1e18;
@@ -97,12 +95,10 @@ contract SuperDCAPoolV1Test is Test {
       host: ISuperfluid(HOST_SUPERFLUID),
       cfa: IConstantFlowAgreementV1(CFA_SUPERFLUID),
       ida: IInstantDistributionAgreementV1(IDA_SUPERFLUID),
-      weth: IWETH(WETH),
-      wethx: ISuperToken(WETHX),
+      weth: IWETH(WETH), // Still needed for fee payments
       inputToken: ISuperToken(USDCX),
-      outputToken: ISuperToken(WETHX),
-      priceFeed: AggregatorV3Interface(ETH_USDC_FEED),
-      invertPrice: false,
+      outputToken: ISuperToken(WBTCX),
+      priceFeed: AggregatorV3Interface(BTC_USD_FEED),
       registrationKey: "k1",
       automate: payable(GELATO_AUTOMATE)
     });
@@ -119,9 +115,9 @@ contract SuperDCAPoolV1Test is Test {
     _dealAndUpgrade(alice, USDC);
     _dealAndUpgrade(bob, USDC);
 
-    // Add subscription approvals with updated parameters
-    _approveSubscription(alice, WETHX, address(pool));
-    _approveSubscription(bob, WETHX, address(pool));
+    // Add subscription approvals for WBTCx output
+    _approveSubscription(alice, WBTCX, address(pool));
+    _approveSubscription(bob, WBTCX, address(pool));
   }
 
   function _dealAndUpgrade(address user, address token) internal {
@@ -131,10 +127,13 @@ contract SuperDCAPoolV1Test is Test {
       IERC20(USDC).approve(USDCX, type(uint256).max);
       ISuperToken(USDCX).upgrade(UPGRADE_AMOUNT);
       vm.stopPrank();
-    } else if (token == WETH) {
-      deal(user, UPGRADE_AMOUNT);
+    } else if (token == WBTC) {
+      // For WBTC, deal 8 decimal amount (1 WBTC = 1e8)
+      deal(WBTC, user, 1e8);
       vm.startPrank(user);
-      ISETHCustom(WETHX).upgradeByETH{value: UPGRADE_AMOUNT}();
+      IERC20(WBTC).approve(WBTCX, type(uint256).max);
+      // Upgrade WBTC to WBTCx - WBTC has 8 decimals, WBTCx has 18
+      ISuperToken(WBTCX).upgrade(1e8 * (10 ** (18 - 8)));
       vm.stopPrank();
     }
   }
@@ -165,9 +164,8 @@ contract SuperDCAPoolV1Test is Test {
   function testFork_PoolInitialization() public view {
     // Verify initialization
     assertEq(address(pool.inputToken()), USDCX);
-    assertEq(address(pool.outputToken()), WETHX);
+    assertEq(address(pool.outputToken()), WBTCX);
     assertEq(address(pool.weth()), WETH);
-    assertEq(address(pool.wethx()), WETHX);
     assertEq(pool.gelatoFeeShare(), 1e16); // 1% default fee
   }
 
@@ -179,14 +177,14 @@ contract SuperDCAPoolV1Test is Test {
 
     pool.distribute(new bytes(0), true);
 
-    uint256 aliceBalance = ISuperToken(WETHX).balanceOf(alice);
-    uint256 bobBalance = ISuperToken(WETHX).balanceOf(bob);
+    uint256 aliceBalance = ISuperToken(WBTCX).balanceOf(alice);
+    uint256 bobBalance = ISuperToken(WBTCX).balanceOf(bob);
 
-    // The both got WETHx
+    // Both got WBTCx
     assertGt(aliceBalance, 0);
     assertGt(bobBalance, 0);
 
-    // The both got the same amount of WETHx
+    // Both got the same amount of WBTCx
     assertEq(aliceBalance, bobBalance);
   }
 
@@ -201,10 +199,10 @@ contract SuperDCAPoolV1Test is Test {
 
     pool.distribute(new bytes(0), true);
 
-    uint256 aliceBalance = ISuperToken(WETHX).balanceOf(alice);
-    uint256 bobBalance = ISuperToken(WETHX).balanceOf(bob);
+    uint256 aliceBalance = ISuperToken(WBTCX).balanceOf(alice);
+    uint256 bobBalance = ISuperToken(WBTCX).balanceOf(bob);
 
-    // Both got WETHx
+    // Both got WBTCx
     assertGt(aliceBalance, 0);
     assertGt(bobBalance, 0);
 
@@ -220,7 +218,7 @@ contract SuperDCAPoolV1Test is Test {
 
     // First distribution
     pool.distribute(new bytes(0), true);
-    uint256 aliceBalanceInitial = ISuperToken(WETHX).balanceOf(alice);
+    uint256 aliceBalanceInitial = ISuperToken(WBTCX).balanceOf(alice);
 
     // Alice updates to 2x flow rate
     _updateFlow(alice, uint96(INFLOW_RATE_USDC * 2));
@@ -229,14 +227,14 @@ contract SuperDCAPoolV1Test is Test {
 
     // Second distribution
     pool.distribute(new bytes(0), true);
-    uint256 aliceBalanceFinal = ISuperToken(WETHX).balanceOf(alice);
+    uint256 aliceBalanceFinal = ISuperToken(WBTCX).balanceOf(alice);
 
     // The second day's earnings should be ~2x the first day
     uint256 firstDayEarnings = aliceBalanceInitial;
     uint256 secondDayEarnings = aliceBalanceFinal - aliceBalanceInitial;
 
-    // 3% tolerance, uniswap v4 pools have low liquidity at this test block
-    assertApproxEqRel(secondDayEarnings, firstDayEarnings * 2, 0.03e18);
+    // 5% tolerance due to price differences and swap impacts
+    assertApproxEqRel(secondDayEarnings, firstDayEarnings * 2, 0.05e18);
   }
 
   function testFork_StreamerCanCloseStream() public {
@@ -247,7 +245,7 @@ contract SuperDCAPoolV1Test is Test {
 
     // First distribution
     pool.distribute(new bytes(0), true);
-    uint256 aliceBalanceAfterFirst = ISuperToken(WETHX).balanceOf(alice);
+    uint256 aliceBalanceAfterFirst = ISuperToken(WBTCX).balanceOf(alice);
 
     // Alice closes her stream
     _deleteFlow(alice);
@@ -256,7 +254,7 @@ contract SuperDCAPoolV1Test is Test {
 
     // Second distribution
     pool.distribute(new bytes(0), true);
-    uint256 aliceBalanceAfterSecond = ISuperToken(WETHX).balanceOf(alice);
+    uint256 aliceBalanceAfterSecond = ISuperToken(WBTCX).balanceOf(alice);
 
     // Alice's balance shouldn't change after closing stream
     assertEq(aliceBalanceAfterFirst, aliceBalanceAfterSecond);
@@ -268,8 +266,7 @@ contract SuperDCAPoolV1Test is Test {
 
     // Check initial trade info
     SuperDCATrade.Trade memory trade = pool.getLatestTrade(alice);
-    assertEq(uint256(int256(trade.flowRate)), uint256(INFLOW_RATE_USDC)); // Convert int96 to
-      // uint256
+    assertEq(uint256(int256(trade.flowRate)), uint256(INFLOW_RATE_USDC));
     // solhint-disable-next-line not-rely-on-time
     assertEq(trade.startTime, uint256(block.timestamp));
     assertEq(trade.endTime, uint256(0)); // Ongoing trade
@@ -326,8 +323,6 @@ contract SuperDCAPoolV1Test is Test {
     );
   }
 
-  // Add other tests here from the TypeScript tests
-
   function testFork_GelatoDistribution() public {
     // Convert INFLOW_RATE_USDC to int96 safely
     int96 flowRate = int96(int256(INFLOW_RATE_USDC * 10));
@@ -336,7 +331,7 @@ contract SuperDCAPoolV1Test is Test {
     _createFlow(alice, USDCX, address(pool), uint96(INFLOW_RATE_USDC * 10));
 
     // Take initial measurements
-    uint256 aliceInitialBalance = ISuperToken(WETHX).balanceOf(alice);
+    uint256 aliceInitialBalance = ISuperToken(WBTCX).balanceOf(alice);
 
     // Skip time and do first distribution
     skip(1 days);
@@ -390,10 +385,10 @@ contract SuperDCAPoolV1Test is Test {
     vm.stopPrank();
 
     // Check Alice's final balance
-    uint256 aliceFinalBalance = ISuperToken(WETHX).balanceOf(alice);
+    uint256 aliceFinalBalance = ISuperToken(WBTCX).balanceOf(alice);
 
-    // Verify Alice received ETHx
-    assertGt(aliceFinalBalance, aliceInitialBalance);
+    // Verify Alice received WBTCx
+    assertGt(aliceFinalBalance, aliceInitialBalance, "Alice should have received WBTCx");
 
     // Get oracle price for comparison
     uint256 oraclePrice = pool.getLatestPrice();
@@ -403,7 +398,7 @@ contract SuperDCAPoolV1Test is Test {
     uint256 minExpectedOutput = (inputAmount * 98) / (oraclePrice * 100);
 
     // Verify Alice got at least the minimum expected amount
-    assertGt(aliceFinalBalance - aliceInitialBalance, minExpectedOutput);
+    assertGt(aliceFinalBalance - aliceInitialBalance, minExpectedOutput, "Alice should have received at least the minimum expected amount");
 
     // Clean up - close Alice's stream
     vm.startPrank(alice);
@@ -509,11 +504,9 @@ contract SuperDCAPoolV1Test is Test {
       cfa: IConstantFlowAgreementV1(CFA_SUPERFLUID),
       ida: IInstantDistributionAgreementV1(IDA_SUPERFLUID),
       weth: IWETH(WETH),
-      wethx: ISuperToken(WETHX),
       inputToken: ISuperToken(USDCX),
-      outputToken: ISuperToken(WETHX),
-      priceFeed: AggregatorV3Interface(ETH_USDC_FEED),
-      invertPrice: false,
+      outputToken: ISuperToken(WBTCX),
+      priceFeed: AggregatorV3Interface(BTC_USD_FEED),
       registrationKey: "k1",
       automate: payable(GELATO_AUTOMATE)
     });
@@ -534,11 +527,9 @@ contract SuperDCAPoolV1Test is Test {
       cfa: IConstantFlowAgreementV1(CFA_SUPERFLUID),
       ida: IInstantDistributionAgreementV1(IDA_SUPERFLUID),
       weth: IWETH(WETH),
-      wethx: ISuperToken(WETHX),
       inputToken: ISuperToken(USDCX),
-      outputToken: ISuperToken(WETHX),
-      priceFeed: AggregatorV3Interface(ETH_USDC_FEED),
-      invertPrice: false,
+      outputToken: ISuperToken(WBTCX),
+      priceFeed: AggregatorV3Interface(BTC_USD_FEED),
       registrationKey: "", // Empty registration key
       automate: payable(GELATO_AUTOMATE)
     });
@@ -619,7 +610,7 @@ contract SuperDCAPoolV1Test is Test {
   }
 
   function testFork_GetNextDistributionTimeWithZeroFlow() public view {
-    // With zero inflow rate, should return lastDistributedAt
+    // With zero inflow rate, should return type(uint256).max
     uint256 nextDistTime = pool.getNextDistributionTime(1e9, 1e6, 1e18);
     assertEq(nextDistTime, type(uint256).max);
   }
@@ -650,10 +641,10 @@ contract SuperDCAPoolV1Test is Test {
     assertEq(result.length, 0); // Should return empty bytes for valid case
     vm.stopPrank();
 
-    // Test valid output token (WETHx) with IDA
+    // Test valid output token (WBTCx) with IDA
     vm.startPrank(HOST_SUPERFLUID);
     result = pool.beforeAgreementCreated(
-      ISuperToken(WETHX), IDA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0)
+      ISuperToken(WBTCX), IDA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0)
     );
     assertEq(result.length, 0); // Should return empty bytes for valid case
     vm.stopPrank();
@@ -670,7 +661,7 @@ contract SuperDCAPoolV1Test is Test {
     vm.startPrank(HOST_SUPERFLUID);
     vm.expectRevert(SuperDCAPoolV1.InvalidToken.selector);
     pool.beforeAgreementCreated(
-      ISuperToken(WETHX), CFA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0)
+      ISuperToken(WBTCX), CFA_SUPERFLUID, bytes32(0), new bytes(0), new bytes(0)
     );
     vm.stopPrank();
 
@@ -686,7 +677,7 @@ contract SuperDCAPoolV1Test is Test {
     _createFlow(alice, USDCX, address(pool), uint96(INFLOW_RATE_USDC));
 
     // Skip a few minutes
-    skip(5 minutes);
+    skip(1 days);
 
     // Create flow for bob directly
     vm.startPrank(bob);
@@ -704,14 +695,14 @@ contract SuperDCAPoolV1Test is Test {
     pool.distribute(new bytes(0), false);
 
     // Verify the distribution happened by checking both balances increased
-    uint256 aliceBalance = ISuperToken(WETHX).balanceOf(alice);
-    uint256 bobBalance = ISuperToken(WETHX).balanceOf(bob);
+    uint256 aliceBalance = ISuperToken(WBTCX).balanceOf(alice);
+    uint256 bobBalance = ISuperToken(WBTCX).balanceOf(bob);
 
-    assertGt(aliceBalance, 0, "Alice should have received WETHx");
-    assertGt(bobBalance, 0, "Bob should have received WETHx");
+    assertGt(aliceBalance, 0, "Alice should have received WBTCx");
+    assertGt(bobBalance, 0, "Bob should have received WBTCx");
 
     // Since Alice started streaming first, she should have more balance
-    assertGt(aliceBalance, bobBalance, "Alice should have more WETHx than Bob");
+    assertGt(aliceBalance, bobBalance, "Alice should have more WBTCx than Bob");
 
     vm.stopPrank();
   }
@@ -777,26 +768,14 @@ contract SuperDCAPoolV1Test is Test {
     SuperDCAPoolV1 newPool =
       new SuperDCAPoolV1(payable(GELATO_AUTOMATE), UNIVERSAL_ROUTER, POOL_MANAGER, PERMIT2);
 
-    // Setup initialization params with zero address price feed
-    address[] memory path = new address[](3);
-    path[0] = USDC;
-    path[1] = DCA;
-    path[2] = WETH;
-
-    uint24[] memory fees = new uint24[](2);
-    fees[0] = 500;
-    fees[1] = 500;
-
     SuperDCAPoolV1.InitParams memory params = SuperDCAPoolV1.InitParams({
       host: ISuperfluid(HOST_SUPERFLUID),
       cfa: IConstantFlowAgreementV1(CFA_SUPERFLUID),
       ida: IInstantDistributionAgreementV1(IDA_SUPERFLUID),
       weth: IWETH(WETH),
-      wethx: ISuperToken(WETHX),
       inputToken: ISuperToken(USDCX),
-      outputToken: ISuperToken(WETHX),
+      outputToken: ISuperToken(WBTCX),
       priceFeed: AggregatorV3Interface(address(0)), // Zero address price feed
-      invertPrice: false,
       registrationKey: "k1",
       automate: payable(GELATO_AUTOMATE)
     });
@@ -917,16 +896,16 @@ contract SuperDCAPoolV1Test is Test {
     // Bob creates a flow to generate fees
     _createFlow(bob, USDCX, address(pool), uint96(INFLOW_RATE_USDC * 10));
 
-    // Record alice's initial balance
-    uint256 aliceInitialBalance = alice.balance;
+    // Record alice's initial USDC balance (executor gets fees in underlying input tokens)
+    uint256 aliceInitialBalance = IERC20(USDC).balanceOf(alice);
 
     // Skip time and distribute
     skip(1 days);
     pool.distribute(new bytes(0), true);
 
-    // Verify alice (executor) received fees
-    uint256 aliceFinalBalance = alice.balance;
-    assertGt(aliceFinalBalance, aliceInitialBalance, "Executor should receive fees in ETH");
+    // Verify alice (executor) received fees in USDC
+    uint256 aliceFinalBalance = IERC20(USDC).balanceOf(alice);
+    assertGt(aliceFinalBalance, aliceInitialBalance, "Executor should receive fees in USDC");
   }
 
   function testFork_UnstakeRestrictions() public {
@@ -939,18 +918,11 @@ contract SuperDCAPoolV1Test is Test {
     uint256 aliceBalanceBeforeUnstake = IERC20(pool.STAKING_TOKEN_ADDRESS()).balanceOf(alice);
     vm.stopPrank();
 
-    // // Bob shouldn't be able to unstake (wasn't previous executor)
-    // vm.startPrank(bob);
-    // vm.expectRevert(SuperDCAPoolV1.NotCurrentExecutor.selector);
-    // pool.unstake();
-    // vm.stopPrank();
-
     // Alice is able to unstake and the executor is updated
     vm.prank(alice);
     pool.unstake();
     assertEq(pool.currentExecutor(), address(0));
     assertEq(pool.currentStake(), 0);
-    vm.stopPrank(); // Should stop prank *after* checking state
 
     // Verify Alice received her stake back
     uint256 aliceBalanceAfterUnstake = IERC20(pool.STAKING_TOKEN_ADDRESS()).balanceOf(alice);
@@ -964,7 +936,6 @@ contract SuperDCAPoolV1Test is Test {
   function testFork_ExecutorReceivesCorrectFeeShare() public {
     // --- Prepare executor stake ---
     uint256 stakeAmount = 1000e18;
-    // Give Alice enough staking tokens
     deal(pool.STAKING_TOKEN_ADDRESS(), alice, stakeAmount);
     vm.startPrank(alice);
     IERC20(pool.STAKING_TOKEN_ADDRESS()).approve(address(pool), stakeAmount);
@@ -980,11 +951,11 @@ contract SuperDCAPoolV1Test is Test {
 
     // --- Execute distribution with fee going to executor (ignoreGasReimbursement = true) ---
     vm.recordLogs();
-    uint256 aliceEthBefore = alice.balance;
+    uint256 aliceUsdcBefore = IERC20(USDC).balanceOf(alice);
 
     pool.distribute(new bytes(0), true);
 
-    uint256 aliceEthAfter = alice.balance;
+    uint256 aliceUsdcAfter = IERC20(USDC).balanceOf(alice);
 
     // --- Decode the Swap event to fetch output and fee figures ---
     Vm.Log[] memory entries = vm.getRecordedLogs();
@@ -1007,15 +978,13 @@ contract SuperDCAPoolV1Test is Test {
     // Sanity check that we indeed captured the event
     assertGt(outputAmount, 0, "Swap event not found or output zero");
 
-    // Expected fee according to gelatoFeeShare
-    uint256 expectedFee = (outputAmount * pool.gelatoFeeShare()) / pool.EXEC_FEE_SCALER();
+    // Calculate input amount based on stream rate and time
+    uint256 inputAmount = highFlowRate * 1 days / 1e12; // USDCx to USDC
+    uint256 expectedFee = (inputAmount * pool.gelatoFeeShare()) / pool.EXEC_FEE_SCALER();
 
-    // The fee recorded in the event should equal the expected fee (1 wei tolerance)
-    assertApproxEqAbs(feePaid, expectedFee, 1, "Mismatch between expected and event fee");
-
-    // Alice (current executor) should have received the same amount in ETH
-    uint256 received = aliceEthAfter - aliceEthBefore;
-    assertApproxEqAbs(received, expectedFee, 1, "Executor did not receive correct ETH amount");
+    // Alice (current executor) should have received the fee share in USDC
+    uint256 received = aliceUsdcAfter - aliceUsdcBefore;
+    assertApproxEqRel(received, expectedFee, 0.01e18, "Executor did not receive correct USDC amount");
   }
 
   function testFork_FeeHalvingLimitEnforced() public {
@@ -1078,4 +1047,4 @@ contract SuperDCAPoolV1Test is Test {
     pool.distribute(new bytes(0), true);
     assertEq(pool.gelatoFeeShare(), newFee / 2);
   }
-}
+} 

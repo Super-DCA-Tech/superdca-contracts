@@ -121,7 +121,7 @@ contract SuperDCASwapTest is Test {
   });
 
 
-  uint256 public constant FORK_BLOCK_NUMBER = 136_282_144; // May 25, 2025
+  uint256 public constant FORK_BLOCK_NUMBER = 136_282_144; 
 
   function setUp() public {
     // Fork Optimism mainnet    
