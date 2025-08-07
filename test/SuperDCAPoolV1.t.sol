@@ -90,7 +90,16 @@ contract SuperDCAPoolV1Test is Test {
     vm.createSelectFork(vm.rpcUrl("optimism"), FORK_BLOCK_NUMBER);
 
     vm.startPrank(AUTHORIZED_DEPLOYER, AUTHORIZED_DEPLOYER);
-    pool = new SuperDCAPoolV1(payable(GELATO_AUTOMATE), UNIVERSAL_ROUTER, POOL_MANAGER, PERMIT2);
+    pool = new SuperDCAPoolV1(
+      payable(GELATO_AUTOMATE), 
+      UNIVERSAL_ROUTER, 
+      POOL_MANAGER, 
+      PERMIT2,
+      USDC_ADDRESS,    // USDC address
+      DCA_ADDRESS,     // DCA token address  
+      ETH_ADDRESS,     // ETH address (native ETH)
+      DCA_ADDRESS      // Staking token address (same as DCA token)
+    );
 
     SuperDCAPoolV1.InitParams memory params = SuperDCAPoolV1.InitParams({
       host: ISuperfluid(HOST_SUPERFLUID),

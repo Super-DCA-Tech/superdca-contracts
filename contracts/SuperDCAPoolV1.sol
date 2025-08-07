@@ -106,10 +106,10 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
   uint128 public constant SHARE_SCALER = 100_000; // The scaler to apply to the share of the
     // outputToken pool
 
-  // Uniswap V4 Constants
-  address constant USDC_ADDRESS = 0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85;
-  address constant DCA_ADDRESS = 0xb1599CDE32181f48f89683d3C5Db5C5D2C7C93cc;
-  address constant ETH_ADDRESS = address(0);
+  // Uniswap V4 Addresses (provided via constructor)
+  address public immutable USDC_ADDRESS;
+  address public immutable DCA_ADDRESS;
+  address public immutable ETH_ADDRESS;
 
   PoolKey DCA_USDC_KEY = PoolKey({
     currency0: Currency.wrap(USDC_ADDRESS),
@@ -167,10 +167,25 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
   error NotClosable();
 
   // --- Constructor ---
-  constructor(address payable _ops, address _router, address _poolManager, address _permit2)
+  constructor(
+    address payable _ops,
+    address _router,
+    address _poolManager,
+    address _permit2,
+    address _usdcAddress,
+    address _dcaAddress,
+    address _ethAddress,
+    address _stakingTokenAddress
+  )
     AutomateTaskCreator(_ops)
     SuperDCASwap(_router, _poolManager, _permit2)
+    SuperDCAPoolStaking(_stakingTokenAddress)
   {
+    // Set the immutable addresses
+    USDC_ADDRESS = _usdcAddress;
+    DCA_ADDRESS = _dcaAddress;
+    ETH_ADDRESS = _ethAddress;
+    
     // Deploy Trade for trade tracking
     dcaTrade = new SuperDCATrade();
   }

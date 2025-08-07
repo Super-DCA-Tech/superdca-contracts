@@ -14,7 +14,7 @@ abstract contract SuperDCAPoolStaking {
   // -------------------------------------------------------------------------
 
   /// @notice ERC-20 token used for staking (DCA governance token)
-  address public constant STAKING_TOKEN_ADDRESS = 0xb1599CDE32181f48f89683d3C5Db5C5D2C7C93cc;
+  address public immutable STAKING_TOKEN_ADDRESS;
 
   /// @notice Address that currently holds the executor role (Gelato task caller)
   address public currentExecutor;
@@ -38,6 +38,16 @@ abstract contract SuperDCAPoolStaking {
 
   error StakeTooLow();
   error NotCurrentExecutor();
+
+  // -------------------------------------------------------------------------
+  // Constructor
+  // -------------------------------------------------------------------------
+
+  /// @notice Constructor to set the staking token address
+  /// @param _stakingTokenAddress Address of the ERC-20 token used for staking
+  constructor(address _stakingTokenAddress) {
+    STAKING_TOKEN_ADDRESS = _stakingTokenAddress;
+  }
 
   // -------------------------------------------------------------------------
   // External functions
