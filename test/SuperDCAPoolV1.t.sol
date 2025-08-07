@@ -48,6 +48,7 @@ contract SuperDCAPoolV1Test is Test {
   address constant ETH_ADDRESS = 0x0000000000000000000000000000000000000000;
   address constant USDC_ADDRESS = 0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85;
   address constant DCA_ADDRESS = 0xb1599CDE32181f48f89683d3C5Db5C5D2C7C93cc;
+  address constant GAUGE_HOOK_ADDRESS = 0xb4f4Ad63BCc0102B10e6227236e569Dce0d97A80;
 
   // Details need to deploy as an approved deployer for SF
   address public constant AUTHORIZED_DEPLOYER = 0x744f96332713EFC378e334A7eccAEc8E19532100;
@@ -104,7 +105,11 @@ contract SuperDCAPoolV1Test is Test {
       priceFeed: AggregatorV3Interface(ETH_USDC_FEED),
       invertPrice: false,
       registrationKey: "k1",
-      automate: payable(GELATO_AUTOMATE)
+      automate: payable(GELATO_AUTOMATE),
+      gaugeHookAddress: GAUGE_HOOK_ADDRESS,
+      usdcAddress: USDC_ADDRESS,
+      dcaAddress: DCA_ADDRESS,
+      ethAddress: ETH_ADDRESS
     });
 
     pool.initialize(params);
@@ -515,7 +520,11 @@ contract SuperDCAPoolV1Test is Test {
       priceFeed: AggregatorV3Interface(ETH_USDC_FEED),
       invertPrice: false,
       registrationKey: "k1",
-      automate: payable(GELATO_AUTOMATE)
+      automate: payable(GELATO_AUTOMATE),
+      gaugeHookAddress: GAUGE_HOOK_ADDRESS,
+      usdcAddress: USDC_ADDRESS,
+      dcaAddress: DCA_ADDRESS,
+      ethAddress: ETH_ADDRESS
     });
 
     // Attempt to initialize again should revert
@@ -540,7 +549,11 @@ contract SuperDCAPoolV1Test is Test {
       priceFeed: AggregatorV3Interface(ETH_USDC_FEED),
       invertPrice: false,
       registrationKey: "", // Empty registration key
-      automate: payable(GELATO_AUTOMATE)
+      automate: payable(GELATO_AUTOMATE),
+      gaugeHookAddress: GAUGE_HOOK_ADDRESS,
+      usdcAddress: USDC_ADDRESS,
+      dcaAddress: DCA_ADDRESS,
+      ethAddress: ETH_ADDRESS
     });
 
     // Should initialize successfully even with empty registration key
@@ -798,7 +811,11 @@ contract SuperDCAPoolV1Test is Test {
       priceFeed: AggregatorV3Interface(address(0)), // Zero address price feed
       invertPrice: false,
       registrationKey: "k1",
-      automate: payable(GELATO_AUTOMATE)
+      automate: payable(GELATO_AUTOMATE),
+      gaugeHookAddress: GAUGE_HOOK_ADDRESS,
+      usdcAddress: USDC_ADDRESS,
+      dcaAddress: DCA_ADDRESS,
+      ethAddress: ETH_ADDRESS
     });
 
     newPool.initialize(params);

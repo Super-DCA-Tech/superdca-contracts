@@ -31,6 +31,10 @@ abstract contract BaseDeploySuperDCAPool is Script {
     address universalRouter;
     address poolManager;
     address permit2;
+    address gaugeHookAddress;
+    address usdcAddress;
+    address dcaAddress;
+    address ethAddress;
     // Chainlink
     address chainlinkEthUsdc;
     address chainlinkUsdcUsd;
@@ -78,7 +82,11 @@ abstract contract BaseDeploySuperDCAPool is Script {
       priceFeed: AggregatorV3Interface(config.chainlinkEthUsdc),
       invertPrice: false,
       registrationKey: config.sfRegKey,
-      automate: payable(config.gelatoAutomate)
+      automate: payable(config.gelatoAutomate),
+      gaugeHookAddress: config.gaugeHookAddress,
+      usdcAddress: config.usdcAddress,
+      dcaAddress: config.dcaAddress,
+      ethAddress: config.ethAddress
     });
 
     // Initialize the pool with the correct params

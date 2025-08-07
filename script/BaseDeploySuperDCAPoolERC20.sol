@@ -27,6 +27,11 @@ abstract contract BaseDeploySuperDCAPoolERC20 is Script {
     address universalRouter;
     address poolManager;
     address permit2;
+    address gaugeHookAddress;
+    address usdcAddress;
+    address dcaAddress;
+    address ethAddress;
+    address wbtcAddress;
     // Chainlink
     address chainlinkBtcUsd;
     // Gelato
@@ -61,7 +66,12 @@ abstract contract BaseDeploySuperDCAPoolERC20 is Script {
       outputToken: ISuperToken(config.wbtcx),
       priceFeed: AggregatorV3Interface(config.chainlinkBtcUsd),
       registrationKey: config.sfRegKey,
-      automate: payable(config.gelatoAutomate)
+      automate: payable(config.gelatoAutomate),
+      gaugeHookAddress: config.gaugeHookAddress,
+      usdcAddress: config.usdcAddress,
+      dcaAddress: config.dcaAddress,
+      ethAddress: config.ethAddress,
+      wbtcAddress: config.wbtcAddress
     });
 
     // Initialize the pool with the correct params

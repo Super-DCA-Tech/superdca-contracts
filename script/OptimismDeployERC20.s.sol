@@ -22,6 +22,11 @@ contract OptimismDeployERC20 is BaseDeploySuperDCAPoolERC20 {
       universalRouter: 0x851116D9223fabED8E56C0E6b8Ad0c31d98B3507,
       poolManager: 0x9a13F98Cb987694C9F086b1F5eB990EeA8264Ec3,
       permit2: 0x000000000022D473030F116dDEE9F6B43aC78BA3,
+      gaugeHookAddress: 0xBc5F29A583a8d3ec76e03372659e01a22feE3A80,
+      usdcAddress: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913,
+      dcaAddress: 0xb1599CDE32181f48f89683d3C5Db5C5D2C7C93cc,
+      ethAddress: 0x0000000000000000000000000000000000000000,
+      wbtcAddress: 0x0555E30da8f98308EdB960aa94C0Db47230d2B9c,
       // Chainlink
       chainlinkBtcUsd: 0xD702DD976Fb76Fffc2D3963D037dfDae5b04E593,
       // Gelato

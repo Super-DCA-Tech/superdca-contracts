@@ -47,6 +47,8 @@ contract SuperDCAPoolV1ERC20Test is Test {
   address constant ETH_ADDRESS = 0x0000000000000000000000000000000000000000;
   address constant USDC_ADDRESS = 0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85;
   address constant DCA_ADDRESS = 0xb1599CDE32181f48f89683d3C5Db5C5D2C7C93cc;
+  address constant WBTC_ADDRESS = 0x68f180fcCe6836688e9084f035309E29Bf0A2095;
+  address constant GAUGE_HOOK_ADDRESS = 0xBc5F29A583a8d3ec76e03372659e01a22feE3A80;
 
   // Details need to deploy as an approved deployer for SF
   address public constant AUTHORIZED_DEPLOYER = 0x744f96332713EFC378e334A7eccAEc8E19532100;
@@ -99,7 +101,12 @@ contract SuperDCAPoolV1ERC20Test is Test {
       outputToken: ISuperToken(WBTCX),
       priceFeed: AggregatorV3Interface(BTC_USD_FEED),
       registrationKey: "k1",
-      automate: payable(GELATO_AUTOMATE)
+      automate: payable(GELATO_AUTOMATE),
+      gaugeHookAddress: GAUGE_HOOK_ADDRESS,
+      usdcAddress: USDC_ADDRESS,
+      dcaAddress: DCA_ADDRESS,
+      ethAddress: ETH_ADDRESS,
+      wbtcAddress: WBTC_ADDRESS
     });
 
     pool.initialize(params);
@@ -505,7 +512,12 @@ contract SuperDCAPoolV1ERC20Test is Test {
       outputToken: ISuperToken(WBTCX),
       priceFeed: AggregatorV3Interface(BTC_USD_FEED),
       registrationKey: "k1",
-      automate: payable(GELATO_AUTOMATE)
+      automate: payable(GELATO_AUTOMATE),
+      gaugeHookAddress: GAUGE_HOOK_ADDRESS,
+      usdcAddress: USDC_ADDRESS,
+      dcaAddress: DCA_ADDRESS,
+      ethAddress: ETH_ADDRESS,
+      wbtcAddress: WBTC_ADDRESS
     });
 
     // Attempt to initialize again should revert
@@ -527,7 +539,12 @@ contract SuperDCAPoolV1ERC20Test is Test {
       outputToken: ISuperToken(WBTCX),
       priceFeed: AggregatorV3Interface(BTC_USD_FEED),
       registrationKey: "", // Empty registration key
-      automate: payable(GELATO_AUTOMATE)
+      automate: payable(GELATO_AUTOMATE),
+      gaugeHookAddress: GAUGE_HOOK_ADDRESS,
+      usdcAddress: USDC_ADDRESS,
+      dcaAddress: DCA_ADDRESS,
+      ethAddress: ETH_ADDRESS,
+      wbtcAddress: WBTC_ADDRESS
     });
 
     // Should initialize successfully even with empty registration key
@@ -772,7 +789,12 @@ contract SuperDCAPoolV1ERC20Test is Test {
       outputToken: ISuperToken(WBTCX),
       priceFeed: AggregatorV3Interface(address(0)), // Zero address price feed
       registrationKey: "k1",
-      automate: payable(GELATO_AUTOMATE)
+      automate: payable(GELATO_AUTOMATE),
+      gaugeHookAddress: GAUGE_HOOK_ADDRESS,
+      usdcAddress: USDC_ADDRESS,
+      dcaAddress: DCA_ADDRESS,
+      ethAddress: ETH_ADDRESS,
+      wbtcAddress: WBTC_ADDRESS
     });
 
     newPool.initialize(params);

@@ -74,6 +74,10 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
     bool invertPrice;
     string registrationKey;
     address payable automate;
+    address gaugeHookAddress;
+    address usdcAddress;
+    address dcaAddress;
+    address ethAddress;
   }
 
   /// @notice Parameters needed to perform a shareholder update (i.e. a flow rate update)
@@ -104,27 +108,14 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
   uint128 public constant SHARE_SCALER = 100_000; // The scaler to apply to the share of the
     // outputToken pool
 
-  // Uniswap V4 Constants
-  address constant GAUGE_HOOK_ADDRESS = 0xb4f4Ad63BCc0102B10e6227236e569Dce0d97A80;
-  address constant USDC_ADDRESS = 0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85;
-  address constant DCA_ADDRESS = 0xb1599CDE32181f48f89683d3C5Db5C5D2C7C93cc;
-  address constant ETH_ADDRESS = address(0);
+  // Uniswap V4 Addresses (set via constructor)
+  address public gaugeHookAddress;
+  address public usdcAddress;
+  address public dcaAddress;
+  address public ethAddress;
 
-  PoolKey DCA_USDC_KEY = PoolKey({
-    currency0: Currency.wrap(USDC_ADDRESS),
-    currency1: Currency.wrap(DCA_ADDRESS),
-    fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
-    tickSpacing: 10,
-    hooks: IHooks(GAUGE_HOOK_ADDRESS)
-  });
-
-  PoolKey DCA_ETH_KEY = PoolKey({
-    currency0: Currency.wrap(ETH_ADDRESS),
-    currency1: Currency.wrap(DCA_ADDRESS),
-    fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
-    tickSpacing: 10,
-    hooks: IHooks(GAUGE_HOOK_ADDRESS)
-  });
+  PoolKey DCA_USDC_KEY;
+  PoolKey DCA_ETH_KEY;
 
   // Chainlink Variables
   AggregatorV3Interface public priceFeed; // Chainlink price feed for the inputToken/outputToken
@@ -182,6 +173,29 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
   // --- Initialization Functions ---
   function initialize(InitParams memory params) public {
     if (address(inputToken) != address(0)) revert AlreadyInitialized();
+
+    // Set Uniswap V4 addresses
+    gaugeHookAddress = params.gaugeHookAddress;
+    usdcAddress = params.usdcAddress;
+    dcaAddress = params.dcaAddress;
+    ethAddress = params.ethAddress;
+
+    // Initialize PoolKeys with the provided addresses
+    DCA_USDC_KEY = PoolKey({
+      currency0: Currency.wrap(usdcAddress),
+      currency1: Currency.wrap(dcaAddress),
+      fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
+      tickSpacing: 10,
+      hooks: IHooks(gaugeHookAddress)
+    });
+
+    DCA_ETH_KEY = PoolKey({
+      currency0: Currency.wrap(ethAddress),
+      currency1: Currency.wrap(dcaAddress),
+      fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
+      tickSpacing: 10,
+      hooks: IHooks(gaugeHookAddress)
+    });
 
     // Initialize Superfluid
     host = params.host;
@@ -356,7 +370,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
 
     // Step 1: inputToken -> DCA
     path[0] = PathKey({
-      intermediateCurrency: Currency.wrap(DCA_ADDRESS),
+      intermediateCurrency: Currency.wrap(dcaAddress),
       fee: DCA_USDC_KEY.fee,
       tickSpacing: DCA_USDC_KEY.tickSpacing,
       hooks: DCA_USDC_KEY.hooks,
@@ -365,7 +379,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
 
     // Step 2: DCA -> outputToken
     path[1] = PathKey({
-      intermediateCurrency: Currency.wrap(outputIsETH ? ETH_ADDRESS : outputAddr),
+      intermediateCurrency: Currency.wrap(outputIsETH ? ethAddress : outputAddr),
       fee: DCA_ETH_KEY.fee,
       tickSpacing: DCA_ETH_KEY.tickSpacing,
       hooks: DCA_ETH_KEY.hooks,
@@ -373,7 +387,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
     });
 
     // Define input currency (use ETH currency for native ETH)
-    Currency currencyIn = Currency.wrap(inputIsETH ? ETH_ADDRESS : inputAddr);
+    Currency currencyIn = Currency.wrap(inputIsETH ? ethAddress : inputAddr);
 
     // Approve tokens for Permit2 if needed (skip for ETH)
     if (!inputIsETH) {
