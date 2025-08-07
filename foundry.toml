@@ -40,5 +40,6 @@
 
 [rpc_endpoints]
   optimism = "${OPTIMISM_RPC_URL}"
+  base = "${BASE_RPC_URL}"
 
   # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
