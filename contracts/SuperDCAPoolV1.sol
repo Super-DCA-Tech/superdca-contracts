@@ -167,12 +167,17 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
   error NotClosable();
 
   // --- Constructor ---
-  constructor(address payable _ops, address _router, address _poolManager, address _permit2)
+  constructor(address payable _ops, address _router, address _poolManager, address _permit2, address _dcaTrade)
     AutomateTaskCreator(_ops)
     SuperDCASwap(_router, _poolManager, _permit2)
   {
-    // Deploy Trade for trade tracking
-    dcaTrade = new SuperDCATrade();
+    // Use provided SuperDCATrade address if given, otherwise deploy new one
+    if (_dcaTrade != address(0)) {
+      dcaTrade = SuperDCATrade(_dcaTrade);
+    } else {
+      // Deploy Trade for trade tracking (backward compatibility)
+      dcaTrade = new SuperDCATrade();
+    }
   }
 
   // --- Initialization Functions ---

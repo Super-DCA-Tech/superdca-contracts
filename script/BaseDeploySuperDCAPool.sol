@@ -60,9 +60,12 @@ abstract contract BaseDeploySuperDCAPool is Script {
     // Set configuration explicitly in each network's deploy script
     NetworkConfiguration memory config = getConfiguration();
 
-    // Deploy the pool
+    // Deploy or use existing SuperDCATrade contract
+    SuperDCATrade dcaTrade = getOrDeploySuperDCATrade();
+
+    // Deploy the pool with the SuperDCATrade address
     SuperDCAPoolV1 pool = new SuperDCAPoolV1(
-      payable(config.gelatoAutomate), config.universalRouter, config.poolManager, config.permit2
+      payable(config.gelatoAutomate), config.universalRouter, config.poolManager, config.permit2, address(dcaTrade)
     );
 
     SuperDCAPoolV1.InitParams memory params = SuperDCAPoolV1.InitParams({
@@ -82,6 +85,24 @@ abstract contract BaseDeploySuperDCAPool is Script {
     // Initialize the pool
     pool.initialize(params);
 
-    return (pool, pool.dcaTrade());
+    return (pool, dcaTrade);
+  }
+
+  /// @notice Get or deploy SuperDCATrade contract
+  /// @dev Override this function to provide an existing SuperDCATrade address
+  /// @return The SuperDCATrade contract instance
+  function getOrDeploySuperDCATrade() public virtual returns (SuperDCATrade) {
+    // Check if environment variable is set for existing SuperDCATrade address
+    string memory existingAddress = vm.envOr("SUPER_DCA_TRADE_ADDRESS", string(""));
+    
+    if (bytes(existingAddress).length > 0) {
+      // Use existing SuperDCATrade contract
+      address dcaTradeAddress = vm.parseAddress(existingAddress);
+      require(dcaTradeAddress != address(0), "Invalid SuperDCATrade address");
+      return SuperDCATrade(dcaTradeAddress);
+    } else {
+      // Deploy new SuperDCATrade contract
+      return new SuperDCATrade();
+    }
   }
 }

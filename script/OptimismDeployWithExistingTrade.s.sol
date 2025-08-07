@@ -3,10 +3,17 @@ pragma solidity ^0.8.13;
 
 import "./BaseDeploySuperDCAPool.sol";
 
-/// @title OptimismDeploy
-/// @notice Deployment script for SuperDCAPool on Optimism
-/// @dev This script maintains backward compatibility while supporting the new SuperDCATrade address parameter
-contract OptimismDeploy is BaseDeploySuperDCAPool {
+/// @title OptimismDeployWithExistingTrade
+/// @notice Deployment script for SuperDCAPool on Optimism using an existing SuperDCATrade contract
+/// @dev This script demonstrates how to deploy a SuperDCAPool that references an existing SuperDCATrade contract
+contract OptimismDeployWithExistingTrade is BaseDeploySuperDCAPool {
+  address public immutable existingSuperDCATrade;
+
+  constructor(address _existingSuperDCATrade) {
+    require(_existingSuperDCATrade != address(0), "Invalid SuperDCATrade address");
+    existingSuperDCATrade = _existingSuperDCATrade;
+  }
+
   function run() public override returns (SuperDCAPoolV1, SuperDCATrade) {
     return super.run();
   }
@@ -46,5 +53,10 @@ contract OptimismDeploy is BaseDeploySuperDCAPool {
       rateTolerance: 150,
       initialPrice: 0
     });
+  }
+
+  /// @notice Override to use the existing SuperDCATrade contract
+  function getOrDeploySuperDCATrade() public view override returns (SuperDCATrade) {
+    return SuperDCATrade(existingSuperDCATrade);
   }
 }
