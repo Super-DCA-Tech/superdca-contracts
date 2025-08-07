@@ -141,6 +141,45 @@ The core features of Super DCA, such as fees accruing to stakeholders, a simple 
 
 Furthermore, the embedded AMM using a Uniswap liquidity network establishes a robust foundation for liquidity provision, facilitating seamless trading experiences and ensuring price stability across various token pairs. Despite initial concerns about liquidity and pricing optimization, empirical results from pilot tests demonstrate the effectiveness of the Super DCA design in achieving competitive exchange rates with minimal liquidity requirements.
 
+## Deployment
+
+Super DCA contracts can be deployed in two modes: standalone pools with their own SuperDCATrade contract, or shared pools that reference a common SuperDCATrade contract for unified rewards tracking.
+
+### Standalone Pool Deployment
+
+Deploy a pool with its own SuperDCATrade contract:
+
+```bash
+# Deploy SuperDCAPoolV1 (USDC->ETH)
+forge script OptimismDeploy.s.sol --rpc-url $OPTIMISM_RPC_URL --broadcast
+
+# Deploy SuperDCAPoolV1ERC20 (USDC->WBTC)  
+forge script BaseDeployERC20.s.sol --rpc-url $BASE_RPC_URL --broadcast
+```
+
+### Shared SuperDCATrade Deployment
+
+For unified rewards tracking across multiple pools:
+
+```bash
+# 1. Deploy SuperDCATrade separately
+forge script DeploySuperDCATrade.s.sol --rpc-url $OPTIMISM_RPC_URL --broadcast
+
+# 2. Deploy pools using the existing SuperDCATrade address
+export EXISTING_TRADE_ADDRESS=0x1234567890abcdef1234567890abcdef12345678
+forge script OptimismDeployWithExistingTrade.s.sol --rpc-url $OPTIMISM_RPC_URL --broadcast
+forge script BaseDeployERC20WithExistingTradeImpl.s.sol --rpc-url $BASE_RPC_URL --broadcast
+```
+
+### Constructor Parameters
+
+Both SuperDCAPoolV1 and SuperDCAPoolV1ERC20 now accept an optional `_dcaTradeAddress` parameter:
+
+- If `address(0)` is provided: Creates a new SuperDCATrade instance (backward compatible)
+- If a valid address is provided: Uses the existing SuperDCATrade contract for unified tracking
+
+This enables multiple pools to share the same SuperDCATrade contract, consolidating all trade NFTs and rewards tracking in a single contract.
+
 ## References
 
 1. Dave White, Dan Robinson, Hayden Adams. 2021. [TWAMM](https://www.paradigm.xyz/2021/07/twamm)
