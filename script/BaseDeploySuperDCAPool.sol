@@ -62,14 +62,14 @@ abstract contract BaseDeploySuperDCAPool is Script {
 
     // Deploy the pool
     SuperDCAPoolV1 pool = new SuperDCAPoolV1(
-      payable(config.gelatoAutomate), 
-      config.universalRouter, 
-      config.poolManager, 
+      payable(config.gelatoAutomate),
+      config.universalRouter,
+      config.poolManager,
       config.permit2,
-      config.usdc,        // USDC address
-      config.dcaToken,    // DCA token address
-      address(0),         // ETH address (native ETH)
-      config.dcaToken     // Staking token address (same as DCA token)
+      config.usdc, // USDC address
+      config.dcaToken, // DCA token address
+      address(0), // ETH address (native ETH)
+      config.dcaToken // Staking token address (same as DCA token)
     );
 
     SuperDCAPoolV1.InitParams memory params = SuperDCAPoolV1.InitParams({

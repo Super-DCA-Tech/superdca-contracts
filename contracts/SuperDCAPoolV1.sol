@@ -172,7 +172,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
     USDC_ADDRESS = _usdcAddress;
     DCA_ADDRESS = _dcaAddress;
     ETH_ADDRESS = _ethAddress;
-    
+
     // Initialize PoolKey structures
     DCA_USDC_KEY = PoolKey({
       currency0: Currency.wrap(USDC_ADDRESS),
@@ -189,7 +189,7 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
       tickSpacing: 200,
       hooks: IHooks(address(0))
     });
-    
+
     // Deploy Trade for trade tracking
     dcaTrade = new SuperDCATrade();
   }
