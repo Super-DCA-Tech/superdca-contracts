@@ -50,7 +50,7 @@ abstract contract BaseDeploySuperDCAPoolERC20 is Script {
 
     // Deploy the pool - pass the correct V4 addresses to constructor
     SuperDCAPoolV1 pool = new SuperDCAPoolV1(
-      payable(config.gelatoAutomate), config.universalRouter, config.poolManager, config.permit2
+      payable(config.gelatoAutomate), config.universalRouter, config.poolManager, config.permit2, address(0)
     );
 
     SuperDCAPoolV1.InitParams memory params = SuperDCAPoolV1.InitParams({
