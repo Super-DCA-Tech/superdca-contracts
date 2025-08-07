@@ -1,0 +1,26 @@
+{
+  "lib/forge-std": {
+    "rev": "f46d8301cf732f4f83846565aa475628265e51e0"
+  },
+  "lib/chainlink": {
+    "rev": "d7b5f7bd0d0db82550e39223aeeb5a5eafe01e24"
+  },
+  "lib/v4-core": {
+    "rev": "a7cf038cd568801a79a9b4cf92cd5b52c95c8585"
+  },
+  "lib/ops": {
+    "rev": "bbeb38a626efe80ecec5b26a013177aa93f07f8f"
+  },
+  "lib/permit2": {
+    "rev": "cc56ad0f3439c502c246fc5cfcc3db92bb8b7219"
+  },
+  "lib/protocol-monorepo": {
+    "rev": "44b6510da3ab026bfdde146846988597cc8829d9"
+  },
+  "lib/openzeppelin-contracts": {
+    "rev": "dc44c9f1a4c3b10af99492eed84f83ed244203f6"
+  },
+  "lib/v4-periphery": {
+    "rev": "eeb3eff28dd5f5f17aa94180fa3610ff59b0e1c8"
+  }
+}
