@@ -111,21 +111,8 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
   address public immutable DCA_ADDRESS;
   address public immutable ETH_ADDRESS;
 
-  PoolKey DCA_USDC_KEY = PoolKey({
-    currency0: Currency.wrap(USDC_ADDRESS),
-    currency1: Currency.wrap(DCA_ADDRESS),
-    fee: 10_000,
-    tickSpacing: 200,
-    hooks: IHooks(address(0))
-  });
-
-  PoolKey DCA_ETH_KEY = PoolKey({
-    currency0: Currency.wrap(ETH_ADDRESS),
-    currency1: Currency.wrap(DCA_ADDRESS),
-    fee: 10_000,
-    tickSpacing: 200,
-    hooks: IHooks(address(0))
-  });
+  PoolKey public DCA_USDC_KEY;
+  PoolKey public DCA_ETH_KEY;
 
   // Chainlink Variables
   AggregatorV3Interface public priceFeed; // Chainlink price feed for the inputToken/outputToken
@@ -185,6 +172,23 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
     USDC_ADDRESS = _usdcAddress;
     DCA_ADDRESS = _dcaAddress;
     ETH_ADDRESS = _ethAddress;
+    
+    // Initialize PoolKey structures
+    DCA_USDC_KEY = PoolKey({
+      currency0: Currency.wrap(USDC_ADDRESS),
+      currency1: Currency.wrap(DCA_ADDRESS),
+      fee: 10_000,
+      tickSpacing: 200,
+      hooks: IHooks(address(0))
+    });
+
+    DCA_ETH_KEY = PoolKey({
+      currency0: Currency.wrap(ETH_ADDRESS),
+      currency1: Currency.wrap(DCA_ADDRESS),
+      fee: 10_000,
+      tickSpacing: 200,
+      hooks: IHooks(address(0))
+    });
     
     // Deploy Trade for trade tracking
     dcaTrade = new SuperDCATrade();
