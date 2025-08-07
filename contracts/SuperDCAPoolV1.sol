@@ -174,9 +174,14 @@ contract SuperDCAPoolV1 is SuperAppBase, AutomateTaskCreator, SuperDCAPoolStakin
     // Use provided SuperDCATrade address if given, otherwise deploy new one
     if (_dcaTrade != address(0)) {
       dcaTrade = SuperDCATrade(_dcaTrade);
+      // Grant this pool the POOL_ROLE to call startTrade/endTrade
+      // Note: This requires the caller to have admin role on the SuperDCATrade contract
+      dcaTrade.grantPoolRole(address(this));
     } else {
       // Deploy Trade for trade tracking (backward compatibility)
       dcaTrade = new SuperDCATrade();
+      // Grant this pool the POOL_ROLE since we own the newly created contract
+      dcaTrade.grantPoolRole(address(this));
     }
   }
 

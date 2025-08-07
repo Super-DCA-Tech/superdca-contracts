@@ -3,9 +3,10 @@ pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 
-contract SuperDCATrade is Ownable, ERC721 {
+contract SuperDCATrade is AccessControl, ERC721 {
+  bytes32 public constant POOL_ROLE = keccak256("POOL_ROLE");
   struct Trade {
     uint256 tradeId;
     uint256 startTime;
@@ -25,11 +26,25 @@ contract SuperDCATrade is Ownable, ERC721 {
   event TradeStarted(address indexed trader, uint256 indexed tradeId);
   event TradeEnded(address indexed trader, uint256 indexed tradeId);
 
-  constructor() ERC721("SuperDCA Trade", "SDCA") {}
+  constructor() ERC721("SuperDCA Trade", "SDCA") {
+    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+  }
+
+  /// @notice Grant pool role to an address
+  /// @param pool Address of the pool contract to authorize
+  function grantPoolRole(address pool) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    _grantRole(POOL_ROLE, pool);
+  }
+
+  /// @notice Revoke pool role from an address  
+  /// @param pool Address of the pool contract to revoke authorization from
+  function revokePoolRole(address pool) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    _revokeRole(POOL_ROLE, pool);
+  }
 
   function startTrade(address _shareholder, int96 _flowRate, uint256 _indexValue, uint256 _units)
     external
-    onlyOwner
+    onlyRole(POOL_ROLE)
   {
     // Mint the shareholder an NFT to track this trade
     uint256 tradeId = _nextTradeId + 1;
@@ -54,7 +69,7 @@ contract SuperDCATrade is Ownable, ERC721 {
 
   function endTrade(address _shareholder, uint256 _indexValue, uint256 _refunded)
     external
-    onlyOwner
+    onlyRole(POOL_ROLE)
   {
     // Get the trade for this shareholder, will always be the last one in the list
     Trade storage trade = trades[tradesByUser[_shareholder][tradesByUser[_shareholder].length - 1]];

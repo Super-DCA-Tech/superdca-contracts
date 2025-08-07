@@ -32,9 +32,13 @@ contract SuperDCAPoolConstructorTest is Test {
     // Verify that the pool uses the provided SuperDCATrade contract
     assertEq(address(pool.dcaTrade()), address(existingDCATrade), "Pool should use provided SuperDCATrade address");
     
+    // Verify that the pool has the POOL_ROLE
+    assertTrue(existingDCATrade.hasRole(existingDCATrade.POOL_ROLE(), address(pool)), "Pool should have POOL_ROLE");
+    
     console.log("✅ Pool successfully uses provided SuperDCATrade address");
     console.log("Expected:", address(existingDCATrade));
     console.log("Actual:  ", address(pool.dcaTrade()));
+    console.log("✅ Pool has POOL_ROLE");
   }
 
   function test_constructor_withZeroAddress() public {
@@ -50,8 +54,12 @@ contract SuperDCAPoolConstructorTest is Test {
     // Verify that the pool created a new SuperDCATrade contract
     assertTrue(address(pool.dcaTrade()) != address(0), "Pool should create new SuperDCATrade when address is zero");
     
+    // Verify that the pool has the POOL_ROLE on the newly created SuperDCATrade
+    assertTrue(pool.dcaTrade().hasRole(pool.dcaTrade().POOL_ROLE(), address(pool)), "Pool should have POOL_ROLE on new SuperDCATrade");
+    
     console.log("✅ Pool successfully created new SuperDCATrade when address is zero");
     console.log("Created dcaTrade at:", address(pool.dcaTrade()));
+    console.log("✅ Pool has POOL_ROLE on new SuperDCATrade");
   }
 
   function test_constructor_backwardCompatibility() public {
@@ -68,8 +76,12 @@ contract SuperDCAPoolConstructorTest is Test {
     // Verify that a new SuperDCATrade contract was created
     assertTrue(address(pool.dcaTrade()) != address(0), "Pool should create new SuperDCATrade for backward compatibility");
     
+    // Verify that the pool has the POOL_ROLE
+    assertTrue(pool.dcaTrade().hasRole(pool.dcaTrade().POOL_ROLE(), address(pool)), "Pool should have POOL_ROLE for backward compatibility");
+    
     console.log("✅ Backward compatibility maintained");
     console.log("Created dcaTrade at:", address(pool.dcaTrade()));
+    console.log("✅ Pool has POOL_ROLE for backward compatibility");
   }
 
   function test_multiplePools_sameDCATrade() public {
@@ -110,13 +122,18 @@ contract SuperDCAPoolConstructorTest is Test {
       "Both pools should reference the same SuperDCATrade"
     );
 
+    // Verify both pools have the POOL_ROLE
+    assertTrue(sharedDCATrade.hasRole(sharedDCATrade.POOL_ROLE(), address(pool1)), "Pool1 should have POOL_ROLE");
+    assertTrue(sharedDCATrade.hasRole(sharedDCATrade.POOL_ROLE(), address(pool2)), "Pool2 should have POOL_ROLE");
+
     console.log("✅ Multiple pools successfully share the same SuperDCATrade contract");
     console.log("Shared dcaTrade:", address(sharedDCATrade));
     console.log("Pool1 dcaTrade:", address(pool1.dcaTrade()));
     console.log("Pool2 dcaTrade:", address(pool2.dcaTrade()));
+    console.log("✅ Both pools have POOL_ROLE");
   }
 
-  function test_dcaTrade_ownership() public {
+  function test_dcaTrade_accessControl() public {
     // Deploy a SuperDCATrade contract
     SuperDCATrade dcaTrade = new SuperDCATrade();
     
@@ -129,14 +146,20 @@ contract SuperDCAPoolConstructorTest is Test {
       address(dcaTrade)
     );
 
-    // The SuperDCATrade should be owned by the deployer (this test contract)
-    // and the pool should be able to call its functions as owner
-    assertEq(dcaTrade.owner(), address(this), "SuperDCATrade should be owned by deployer");
+    // The deployer (this test contract) should have DEFAULT_ADMIN_ROLE
+    assertTrue(dcaTrade.hasRole(dcaTrade.DEFAULT_ADMIN_ROLE(), address(this)), "Deployer should have DEFAULT_ADMIN_ROLE");
     
-    // Transfer ownership to the pool
-    dcaTrade.transferOwnership(address(pool));
-    assertEq(dcaTrade.owner(), address(pool), "SuperDCATrade ownership should be transferred to pool");
+    // The pool should have POOL_ROLE
+    assertTrue(dcaTrade.hasRole(dcaTrade.POOL_ROLE(), address(pool)), "Pool should have POOL_ROLE");
+    
+    // Test that we can grant/revoke pool roles as admin
+    address dummyPool = address(0x1234);
+    dcaTrade.grantPoolRole(dummyPool);
+    assertTrue(dcaTrade.hasRole(dcaTrade.POOL_ROLE(), dummyPool), "Should be able to grant POOL_ROLE");
+    
+    dcaTrade.revokePoolRole(dummyPool);
+    assertFalse(dcaTrade.hasRole(dcaTrade.POOL_ROLE(), dummyPool), "Should be able to revoke POOL_ROLE");
 
-    console.log("✅ SuperDCATrade ownership transfer works correctly");
+    console.log("✅ SuperDCATrade access control works correctly");
   }
 }

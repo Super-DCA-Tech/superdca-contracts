@@ -68,6 +68,10 @@ abstract contract BaseDeploySuperDCAPool is Script {
       payable(config.gelatoAutomate), config.universalRouter, config.poolManager, config.permit2, address(dcaTrade)
     );
 
+    // The constructor should have already granted the pool role, but let's verify it worked
+    // If it failed, the deployer needs admin role on the SuperDCATrade contract
+    require(dcaTrade.hasRole(dcaTrade.POOL_ROLE(), address(pool)), "Pool role not granted");
+
     SuperDCAPoolV1.InitParams memory params = SuperDCAPoolV1.InitParams({
       host: ISuperfluid(config.hostSuperfluid),
       cfa: IConstantFlowAgreementV1(config.cfaSuperfluid),

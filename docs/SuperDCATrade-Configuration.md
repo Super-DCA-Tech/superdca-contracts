@@ -119,15 +119,22 @@ For new deployments, consider:
 
 ## Security Considerations
 
-### SuperDCATrade Ownership
-- The SuperDCATrade contract should be owned by a trusted entity
-- Consider using a multisig or governance contract for ownership
-- Pool contracts need appropriate permissions to call SuperDCATrade functions
+### SuperDCATrade Access Control
+The SuperDCATrade contract uses OpenZeppelin's AccessControl for permission management:
 
-### Access Control
-- Only authorized pools should be able to call SuperDCATrade functions
-- Consider implementing role-based access control if needed
-- Verify pool addresses before granting permissions
+- **DEFAULT_ADMIN_ROLE**: Can grant/revoke roles, typically held by the deployer or governance contract
+- **POOL_ROLE**: Can call `startTrade` and `endTrade` functions, automatically granted to pool contracts
+
+### Role Management
+- SuperDCAPool contracts automatically receive POOL_ROLE during construction
+- The deployer must have DEFAULT_ADMIN_ROLE on existing SuperDCATrade contracts to grant pool roles
+- Consider using a multisig or governance contract for admin role management
+- Multiple pools can have POOL_ROLE on the same SuperDCATrade contract
+
+### Access Control Flow
+1. When deploying with new SuperDCATrade: Pool becomes admin and grants itself POOL_ROLE
+2. When deploying with existing SuperDCATrade: Pool calls `grantPoolRole(address(this))` (requires deployer to have admin role)
+3. Pool can then call `startTrade` and `endTrade` functions as needed
 
 ## Testing
 
